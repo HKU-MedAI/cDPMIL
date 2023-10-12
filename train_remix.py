@@ -249,11 +249,11 @@ def main():
     # For Camelyon, we follow DSMIL to use binary labels: 1 for positive bags and 0 for negative bags.
     # For Unitopatho, we use one-hot encoding.
     args.num_classes = {'Camelyon': 1, 'Unitopatho': 6, 'COAD':1}[args.dataset]
-    train_labels_pth = f'{args.data_root}/{args.dataset}/remix_processed/train_bag_labels.npy'
-    test_labels_pth = f'{args.data_root}/{args.dataset}/remix_processed/test_bag_labels.npy'
+    train_labels_pth = f'{args.data_root}/{args.dataset}16/remix_processed/train_bag_labels.npy'
+    test_labels_pth = f'{args.data_root}/{args.dataset}16/remix_processed/test_bag_labels.npy'
 
     # loading the list of test data
-    test_feats = open(f'{args.data_root}/{args.dataset}/remix_processed/test_list.txt', 'r').readlines()
+    test_feats = open(f'{args.data_root}/{args.dataset}16/remix_processed/test_list.txt', 'r').readlines()
     test_feats = np.array(test_feats)
     
     # use first_time to avoid duplicated logs
@@ -280,7 +280,7 @@ def main():
 
         if args.num_prototypes is not None:
             # load reduced-bag
-            train_feats_pth = f'{args.data_root}/{args.dataset}/remix_processed/train_bag_feats_proto_{args.num_prototypes}.npy'
+            train_feats_pth = f'{args.data_root}/{args.dataset}16/remix_processed/train_bag_feats_proto_{args.num_prototypes}_v2.npy'
             logging.info(f'loading train_feats from {train_feats_pth}')
             # loading features
             train_feats = np.load(train_feats_pth, allow_pickle=True)
@@ -288,13 +288,13 @@ def main():
 
             if args.mode == 'cov' or args.mode == 'joint':
                 # loading semantic shift vectors
-                train_shift_bank_pth = f'{args.data_root}/{args.dataset}/remix_processed/train_bag_feats_shift_{args.num_prototypes}.npy'
+                train_shift_bank_pth = f'{args.data_root}/{args.dataset}16/remix_processed/train_bag_feats_shift_{args.num_prototypes}_v2.npy'
                 semantic_shifts = np.load(f'{train_shift_bank_pth}')
             else:
                 semantic_shifts = None
         else:
             # when train_feats is None, loading them directly from the dataset npy folder.
-            train_feats = open(f'{args.data_root}/{args.dataset}/remix_processed/train_list.txt', 'r').readlines()
+            train_feats = open(f'{args.data_root}/{args.dataset}16/remix_processed/train_list.txt', 'r').readlines()
             train_feats = np.array(train_feats)
             semantic_shifts = None
             

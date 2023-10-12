@@ -112,7 +112,7 @@ def process_COAD():
 
 
 def split_camelyon16():
-    bags_csv = 'datasets/Camelyon/Camelyon.csv'
+    bags_csv = 'datasets/Camelyon/Camelyon16.csv'
     bags_path = pd.read_csv(bags_csv)
     os.makedirs('datasets/Camelyon/remix_processed', exist_ok=True)
     train_list_txt = open('datasets/Camelyon/remix_processed/train_list.txt', 'w')
