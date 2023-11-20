@@ -6,3 +6,6 @@ __pycache__/
 datasets/
 remix_workdir/
 .vscode
+./archive
+./OpenSelfSup-MIL
+./Count_Null_Dir.py

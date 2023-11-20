@@ -16,6 +16,10 @@ from torch.autograd import Variable
 
 from model import abmil, dsmil
 from tools.utils import setup_logger
+from model.dpmil import DirichletProcess
+
+import os
+os.environ['CUDA_VISIBLE_DEVICES']='1'
 
 warnings.simplefilter('ignore')
 
@@ -263,6 +267,8 @@ def main():
         logging.info(f'current args: {args}')
         logging.info(f'augmentation mode: {args.mode}')
 
+        # milnet = DP_Cluster(concentration=0.1,trunc=2,eta=1,batch_size=1,epoch=20, dim=512).cuda()
+
         # prepare model
         if args.model == 'abmil':
             milnet = abmil.BClassifier(args.feats_size, args.num_classes).cuda()
@@ -280,7 +286,7 @@ def main():
 
         if args.num_prototypes is not None:
             # load reduced-bag
-            train_feats_pth = f'{args.data_root}/{args.dataset}16/remix_processed/train_bag_feats_proto_{args.num_prototypes}_v2.npy'
+            train_feats_pth = f'{args.data_root}/{args.dataset}/remix_processed/train_bag_feats_proto_{args.num_prototypes}_v2.npy'
             logging.info(f'loading train_feats from {train_feats_pth}')
             # loading features
             train_feats = np.load(train_feats_pth, allow_pickle=True)
@@ -288,10 +294,11 @@ def main():
 
             if args.mode == 'cov' or args.mode == 'joint':
                 # loading semantic shift vectors
-                train_shift_bank_pth = f'{args.data_root}/{args.dataset}16/remix_processed/train_bag_feats_shift_{args.num_prototypes}_v2.npy'
+                train_shift_bank_pth = f'{args.data_root}/{args.dataset}/remix_processed/train_bag_feats_shift_{args.num_prototypes}_v2.npy'
                 semantic_shifts = np.load(f'{train_shift_bank_pth}')
             else:
                 semantic_shifts = None
+            # semantic_shifts = None
         else:
             # when train_feats is None, loading them directly from the dataset npy folder.
             train_feats = open(f'{args.data_root}/{args.dataset}16/remix_processed/train_list.txt', 'r').readlines()

@@ -7,7 +7,9 @@ import faiss
 import torch
 from scipy.sparse import csr_matrix
 
+
 __all__ = ['Kmeans', 'PIC']
+
 
 
 def preprocess_features(npdata, pca):
