@@ -7,13 +7,15 @@ import torch
 from tqdm import tqdm
 
 from tools.clustering import Kmeans
-from model.dpmil import DirichletProcess,HDP_binary_classifier
+from model.dpmil import DirichletProcess,DP_Cluster, DP_Classifier
 from collections import Counter
 import random
 from sklearn.metrics import (accuracy_score, precision_score, recall_score,
                              roc_auc_score, roc_curve)
-
-os.environ['CUDA_VISIBLE_DEVICES']='0'
+import math
+import wandb
+from pyhealth.metrics import binary_metrics_fn
+os.environ['CUDA_VISIBLE_DEVICES']='4'
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -28,21 +30,31 @@ def setup_seed(seed):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.enabled = True
 
-def train(train_list, train_labels, model, criterion, optimizer):
+def train(train_list, train_labels, model, criterion, optimizer, eta_cluster):
+
     model.train()
     total_loss = 0
     for i,feat_pth,label in tqdm(zip(range(len(train_list)),train_list,train_labels)):
         optimizer.zero_grad()
         bag_feats = np.load(feat_pth)
         bag_feats = torch.tensor(bag_feats).to(device)
+        dp_cluster = DP_Cluster(concentration=0.1, trunc=10, eta=eta_cluster, batch_size=1, epoch=20, dim=512).to(
+            device)
+        logits = dp_cluster(bag_feats)
+        assignments = torch.argmax(logits, dim=1)
+        # num_cluster = len(torch.unique(assignments))
+        centroids = [torch.mean(bag_feats[assignments == i], dim=0) for i in torch.unique(assignments)]
+        centroids = torch.stack(centroids) # [num_cluster, dim]
+        # centroids = np.array([np.mean(bag_feats[assignments == i], axis=0) for i in range(args.num_prototypes)])
         # abort invalid features
         if torch.isnan(bag_feats).sum() > 0:
             continue
-        bag_prediction, neg_likelyhood = model(bag_feats)
-        MC_num = bag_prediction.shape[0]
-        bag_label = torch.tensor([label]*MC_num).to(device)
+        bag_prediction = model(centroids)
+        bag_prediction = torch.mean(bag_prediction, axis=0).unsqueeze(0)
+        # MC_num = bag_prediction.shape[0]
+        bag_label = torch.tensor([label]).to(device)
         bag_loss = criterion(bag_prediction,bag_label)
-        loss = bag_loss + neg_likelyhood
+        loss = bag_loss
 
         loss.backward()
         optimizer.step()
@@ -50,15 +62,23 @@ def train(train_list, train_labels, model, criterion, optimizer):
         print('\r Training bag [%d/%d] bag loss: %.4f' % (i, len(train_list), loss.item()))
     return total_loss/len(train_list)
 
-def test(test_list, test_labels, model, criterion):
+def test(test_list, test_labels, model, criterion, eta_cluster):
     model.eval()
     total_loss = 0
     test_predictions = []
-    with torch.no_grad():
-        for i,(feat_pth,label) in enumerate(zip(test_list,test_labels)):
-            bag_feats = np.load(feat_pth)
-            bag_feats = torch.tensor(bag_feats).to(device)
-            bag_prediction, neg_likelyhood = model(bag_feats)
+
+    for i,(feat_pth,label) in enumerate(zip(test_list,test_labels)):
+        bag_feats = np.load(feat_pth)
+        bag_feats = torch.tensor(bag_feats).to(device)
+        dp_cluster = DP_Cluster(concentration=0.1, trunc=10, eta=eta_cluster, batch_size=1, epoch=20, dim=512).to(
+            device)
+        logits = dp_cluster(bag_feats)
+        assignments = torch.argmax(logits, dim=1)
+        # num_cluster = len(torch.unique(assignments))
+        centroids = [torch.mean(bag_feats[assignments == i], dim=0) for i in torch.unique(assignments)]
+        centroids = torch.stack(centroids)
+        with torch.no_grad():
+            bag_prediction = model(centroids)
             bag_prediction = torch.mean(bag_prediction, axis=0).unsqueeze(0)
             bag_label = torch.tensor([label]).to(device)
             loss = criterion(bag_prediction,bag_label)
@@ -66,20 +86,33 @@ def test(test_list, test_labels, model, criterion):
             print('\r Testing bag [%d/%d] bag loss: %.4f' % (i, len(test_list), loss.item()))
             prob = torch.nn.Softmax(dim=1)(bag_prediction)
             test_predictions.append(prob.squeeze().cpu().numpy())
+
     test_predictions = np.array(test_predictions)
     test_predictions = test_predictions[:,1]
     _, _, thresholds_optimal = multi_label_roc(test_labels, test_predictions, 1)
-    class_prediction_bag = copy.deepcopy(test_predictions)
-    class_prediction_bag[test_predictions >= thresholds_optimal[0]] = 1
-    class_prediction_bag[test_predictions < thresholds_optimal[0]] = 0
-    test_predictions = class_prediction_bag
-    test_labels = np.squeeze(test_labels)
+
+    # a = test_predictions
+
+    # class_prediction_bag = copy.deepcopy(test_predictions)
+    # class_prediction_bag[test_predictions >= thresholds_optimal[0]] = 1
+    # class_prediction_bag[test_predictions < thresholds_optimal[0]] = 0
+    # test_predictions = class_prediction_bag
+    # test_labels = np.squeeze(test_labels)
     y_pred, y_true = inverse_convert_label(test_predictions), inverse_convert_label(test_labels)
-    p = precision_score(y_true, y_pred, average='macro')
-    r = recall_score(y_true, y_pred, average='macro')
-    acc = accuracy_score(y_true, y_pred)
+
+    res = binary_metrics_fn(y_true, test_predictions, threshold=thresholds_optimal[0],
+                            metrics=['accuracy', 'precision', 'recall', 'roc_auc'])
+    acc = res['accuracy']
+    p = res['precision']
+    r = res['recall']
+    c_auc = res['roc_auc']
+    # p = precision_score(y_true, y_pred, average='macro')
+    # r = recall_score(y_true, y_pred, average='macro')
+    # acc = accuracy_score(y_true, y_pred)
     avg = np.mean([p, r, acc])
-    c_auc = roc_auc_score(y_pred, y_true)
+    # c_auc = roc_auc_score(y_true, y_pred)
+
+
     return p, r, acc, avg, c_auc
 
 def inverse_convert_label(labels):
@@ -114,6 +147,7 @@ def optimal_thresh(fpr, tpr, thresholds, p=0):
     idx = np.argmin(loss, axis=0)
     return fpr[idx], tpr[idx], thresholds[idx]
 
+# reduce function is not used
 def reduce(args, train_list, train_label):
     setup_seed(1)
     prototypes = []
@@ -235,21 +269,45 @@ if __name__ == '__main__':
     test_list = [x.split(',')[0] for x in test_list]
     test_labels_pth = f'datasets/{args.dataset}16/remix_processed/test_bag_labels.npy'
     test_label = np.load(test_labels_pth)
+    config = {"lr":0.01,'eta_cluster':5,'eta_classifier':5}
+    # eta [0.1-10]
+    for eta_cluster in [ 1, 3, 5, 7, 10]:
+        for eta_classifier in [ 1, 3, 5, 7, 10]:
+            if eta_classifier==5 and eta_cluster==5:
+                continue
+    # for lr in [ # for (eta_classifier,eta_cluster)=(5,5)
+    #     0.00005, 0.0001, 0.0005, 0.001, 0.01, 0.1, 1
+    # ]:
+        # config["eta_cluster"] = eta_cluster
+        # config["eta_classifier"] = eta_classifier
+            else:
+                config["eta_cluster"] = eta_cluster
+                config["eta_classifier"] = eta_classifier
+                wandb.init(name='Camelyon_HDPMIL',
+                           project='HDPMIL',
+                           notes='',
+                           mode='online', # disabled/online/offline
+                           config=config,
+                           tags=[])
+                model = DP_Classifier(concentration=0.1,trunc=2,eta=eta_classifier,batch_size=1,dim=512,n_sample=1).to(device)
+                # model = HDP_binary_classifier(concentration=0.1,trunc=2, eta=1, batch_size=1, MC_num=100, dim=512, n_sample=1).to(device)
+                criterion = torch.nn.CrossEntropyLoss()
+                optimizer = torch.optim.Adam(model.parameters(), lr=0.01, betas=(0.5, 0.9), weight_decay=args.weight_decay)
+                scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.num_epochs, 0.000005)
 
-    model = HDP_binary_classifier(concentration=0.1,trunc=2, eta=1, batch_size=1, MC_num=100, dim=512, n_sample=1).to(device)
-    criterion = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, betas=(0.5, 0.9), weight_decay=args.weight_decay)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.num_epochs, 0.000005)
+                for epoch in range(args.num_epochs):
+                    shuffled_train_idxs = np.random.permutation(len(train_label))
+                    train_list, train_label = [train_list[index] for index in shuffled_train_idxs], train_label[shuffled_train_idxs]
+                    train_loss_bag = train(train_list, train_label, model, criterion, optimizer, eta_cluster)
+                    precision, recall, accuracy, avg, auc = test(test_list, test_label, model, criterion, eta_cluster)
+                    wandb.log({'train_loss': train_loss_bag, 'precision': precision, 'recall': recall, 'accuracy': accuracy, 'avg': avg, 'auc': auc})
+                    print('Epoch [%d/%d] train loss: %.4f' % (epoch, args.num_epochs, train_loss_bag))
+                    scheduler.step()
+                # train(train_list, train_label, model, criterion, optimizer)
+                # precision, recall, accuracy, avg, auc = test(test_list, test_label, model, criterion)
+                # print(f'Precision, Recall, Accuracy, Avg, AUC')
+                # print((f'{precision*100:.2f} {recall*100:.2f} {accuracy*100:.2f} {avg*100:.2f} {auc*100:.2f}'))
+                wandb.finish()
 
-    for epoch in range(args.num_epochs):
-        shuffled_train_idxs = np.random.permutation(len(train_label))
-        train_list, train_label = [train_list[index] for index in shuffled_train_idxs], train_label[shuffled_train_idxs]
-        train_loss_bag = train(train_list, train_label, model, criterion, optimizer)
-        print('Epoch [%d/%d] train loss: %.4f' % (epoch, args.num_epochs, train_loss_bag))
-        scheduler.step()
-    # train(train_list, train_label, model, criterion, optimizer)
-    precision, recall, accuracy, avg, auc = test(test_list, test_label, model, criterion)
-    print(f'Precision, Recall, Accuracy, Avg, AUC')
-    print((f'{precision*100:.2f} {recall*100:.2f} {accuracy*100:.2f} {avg*100:.2f} {auc*100:.2f}'))
 
 
