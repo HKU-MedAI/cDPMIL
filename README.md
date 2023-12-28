@@ -103,9 +103,9 @@ To reduce the number of instances per bag, ReMix uses KMeans clustering to selec
 
 ```shell
 # Camelyon
-python3 reduce.py --dataset Camelyon --num_prototypes 8
+python3 main.py --dataset Camelyon --num_prototypes 8
 # UniToPatho
-python3 reduce.py --dataset Unitopatho --num_prototypes 1
+python3 main.py --dataset Unitopatho --num_prototypes 1
 ```
 
 You can further control the number of generated semantic shift vectors by passing, e.g., `--num_shift_vectors 500`.

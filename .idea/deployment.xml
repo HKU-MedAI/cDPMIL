@@ -2,13 +2,6 @@
 <project version="4">
   <component name="PublishConfigData" autoUpload="Always" serverName="r20user8@research20.saas.hku.hk:22 (3)" remoteFilesAllowedToDisappearOnAutoupload="false">
     <serverData>
-      <paths name="r10user8@research10.saas.hku.hk:22">
-        <serverdata>
-          <mappings>
-            <mapping local="$PROJECT_DIR$" web="/" />
-          </mappings>
-        </serverdata>
-      </paths>
       <paths name="r10user8@research10.saas.hku.hk:22 (2)">
         <serverdata>
           <mappings>

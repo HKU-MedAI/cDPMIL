@@ -19,6 +19,8 @@ from tools.utils import setup_logger
 from model.dpmil import DirichletProcess
 
 import os
+import wandb
+from pyhealth.metrics import binary_metrics_fn
 os.environ['CUDA_VISIBLE_DEVICES']='1'
 
 warnings.simplefilter('ignore')
@@ -193,11 +195,14 @@ def test(test_feats, test_gts, milnet, criterion, args):
             class_prediction_bag[test_predictions[:, i] < thresholds_optimal[i]] = 0
             test_predictions[:, i] = class_prediction_bag
     y_pred, y_true = inverse_convert_label(test_predictions), inverse_convert_label(test_labels)
-    p = precision_score(y_true, y_pred, average='macro')
-    r = recall_score(y_true, y_pred, average='macro')
-    acc = accuracy_score(y_true, y_pred)
+
+    res = binary_metrics_fn(y_true, test_predictions, threshold=thresholds_optimal[0],
+                            metrics=['accuracy', 'precision', 'recall', 'roc_auc'])
+    acc = res['accuracy']
+    p = res['precision']
+    r = res['recall']
+    c_auc = res['roc_auc']
     avg = np.mean([p, r, acc])
-    c_auc = roc_auc_score(y_pred, y_true)
     return p, r, acc, avg, c_auc
 
 
@@ -262,6 +267,7 @@ def main():
     
     # use first_time to avoid duplicated logs
     first_time = True
+    config = {"lr": args.lr, "rep_num": 100}
     for t in range(args.num_repeats):
         ckpt_pth = setup_logger(args, first_time)
         logging.info(f'current args: {args}')
@@ -308,14 +314,27 @@ def main():
         # loading labels
         train_labels, test_labels = np.load(train_labels_pth), np.load(test_labels_pth)
         train_labels, test_labels = torch.Tensor(train_labels).cuda(), torch.Tensor(test_labels).cuda()
-        
+
+
+        config["rep_num"]=t
+        wandb.init(name='Camelyon_Remix',
+                   project='HDPMIL',
+                   notes='',
+                   mode='online',  # disabled/online/offline
+                   config=config,
+                   tags=[])
         for epoch in range(1, args.num_epochs + 1):
             # shuffle data
+
             shuffled_train_idxs = np.random.permutation(len(train_labels))
             train_feats, train_labels = train_feats[shuffled_train_idxs], train_labels[shuffled_train_idxs]
             train_loss_bag = train(train_feats, train_labels, milnet, criterion, optimizer, args, semantic_shifts)
+            precision, recall, accuracy, avg, auc = test(test_feats, test_labels, milnet, criterion, args)
+            wandb.log({'train_loss': train_loss_bag, 'precision': precision, 'recall': recall, 'accuracy': accuracy,
+                       'avg': avg, 'auc': auc})
             logging.info('Epoch [%d/%d] train loss: %.4f' % (epoch, args.num_epochs, train_loss_bag))
             scheduler.step()
+        wandb.finish()
 
         precision, recall, accuracy, avg, auc = test(test_feats, test_labels, milnet, criterion, args)
         torch.save(milnet.state_dict(), ckpt_pth)
