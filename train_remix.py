@@ -315,7 +315,6 @@ def main():
         train_labels, test_labels = np.load(train_labels_pth), np.load(test_labels_pth)
         train_labels, test_labels = torch.Tensor(train_labels).cuda(), torch.Tensor(test_labels).cuda()
 
-
         config["rep_num"]=t
         wandb.init(name='Camelyon_Remix',
                    project='HDPMIL',

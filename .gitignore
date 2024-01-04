@@ -9,3 +9,6 @@ remix_workdir/
 ./archive
 ./OpenSelfSup-MIL
 ./Count_Null_Dir.py
+./dirichlet_process.py
+./main_HDP_EM_DP_VI.py
+model/dpmil_HDP_EM.py
