@@ -7,6 +7,7 @@ import sys
 import warnings
 
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 from scipy.spatial.distance import cdist
@@ -16,12 +17,12 @@ from torch.autograd import Variable
 
 from model import abmil, dsmil
 from tools.utils import setup_logger
-from model.dpmil import DirichletProcess
+# from model.dpmil import DirichletProcess
 
 import os
 import wandb
 from pyhealth.metrics import binary_metrics_fn
-os.environ['CUDA_VISIBLE_DEVICES']='1'
+os.environ['CUDA_VISIBLE_DEVICES']='0'
 
 warnings.simplefilter('ignore')
 
@@ -40,6 +41,28 @@ def get_bag_feats_v2(feats, bag_label, args):
             label[int(bag_label)] = 1
         bag_label = Variable(torch.FloatTensor([label]).cuda())
         
+    return bag_label, feats
+
+
+def get_bag_feats_v1(feats, bag_label, args):
+    if isinstance(feats, str):
+        # if feats is a path, load it
+        slide_name = feats.split('/')[-1].split('.')[0]
+        if 'test' not in slide_name:
+            feat_pth = f'/data1/WSI/Patches/Features/Camelyon16/simclr_files/traning/{slide_name}/features.pt'
+        else:
+            feat_pth = f'/data1/WSI/Patches/Features/Camelyon16/simclr_files/testing/{slide_name}/features.pt'
+        feats = torch.load(feat_pth)
+
+
+    feats = feats[np.random.permutation(len(feats))]
+    if args.num_classes != 1:
+        # mannual one-hot encoding, following dsmil
+        label = np.zeros(args.num_classes)
+        if int(bag_label) <= (len(label) - 1):
+            label[int(bag_label)] = 1
+        bag_label = Variable(torch.FloatTensor([label]).cuda())
+
     return bag_label, feats
 
 
@@ -126,7 +149,7 @@ def train(train_feats, train_labels, milnet, criterion, optimizer, args, semanti
     total_loss = 0
     for i in range(len(train_feats)):
         optimizer.zero_grad()
-        bag_label, bag_feats = get_bag_feats_v2(train_feats[i], train_labels[i], args)
+        bag_label, bag_feats = get_bag_feats_v1(train_feats[i], train_labels[i], args)
         # abort invalid features
         if torch.isnan(bag_feats).sum() > 0:
             continue
@@ -159,10 +182,28 @@ def test(test_feats, test_gts, milnet, criterion, args):
     test_predictions = []
     with torch.no_grad():
         for i in range(len(test_feats)):
-            bag_label, bag_feats = get_bag_feats_v2(test_feats[i], test_gts[i], args)
+            bag_label, bag_feats = get_bag_feats_v1(test_feats[i], test_gts[i], args)
             bag_feats = bag_feats.view(-1, args.feats_size)
             if args.model == 'dsmil':
                 ins_prediction, bag_prediction, _, _ = milnet(bag_feats)
+
+                # pred = torch.sigmoid(ins_prediction.view(-1)).cpu().numpy()
+                # slide_name = test_feats[i].split(',')[0].split('/')[-1].split('.')[0]
+                # if 'test' not in slide_name:
+                #     coor_pth = f'/data1/WSI/Patches/Features/Camelyon16/simclr_files/traning/{slide_name}/c_idx.txt'
+                # else:
+                #     coor_pth = f'/data1/WSI/Patches/Features/Camelyon16/simclr_files/testing/{slide_name}/c_idx.txt'
+                # with open(coor_pth) as f:
+                #     coor = f.readlines()
+                # X = []
+                # Y = []
+                # for item in coor:
+                #     X.append(int(item.split('\t')[0])*256)
+                #     Y.append(int(item.split('\t')[1])*256)
+                # coor_prob_info = {'X':X,'Y':Y,'prob':pred}
+                # coor_prob_info = pd.DataFrame(coor_prob_info)
+                # coor_prob_info.to_csv(f'/data1/WSI/Patches/Features/Camelyon16/simclr_files/testing/{slide_name}/coor_prob.csv')
+
                 max_prediction, _ = torch.max(ins_prediction, 0)
                 bag_loss = criterion(bag_prediction.view(1, -1), bag_label.view(1, -1))
                 max_loss = criterion(max_prediction.view(1, -1), bag_label.view(1, -1))
@@ -179,31 +220,19 @@ def test(test_feats, test_gts, milnet, criterion, args):
             test_predictions.extend([(torch.sigmoid(bag_prediction)).squeeze().cpu().numpy()])
         sys.stdout.write('\n')
     test_labels = np.array(test_labels)
-    test_labels = test_labels.reshape(len(test_labels), -1)
+    # test_labels = test_labels.reshape(len(test_labels), -1)
     test_predictions = np.array(test_predictions)
-    _, _, thresholds_optimal = multi_label_roc(test_labels, test_predictions, args.num_classes)
-    if args.num_classes == 1:
-        class_prediction_bag = copy.deepcopy(test_predictions)
-        class_prediction_bag[test_predictions >= thresholds_optimal[0]] = 1
-        class_prediction_bag[test_predictions < thresholds_optimal[0]] = 0
-        test_predictions = class_prediction_bag
-        test_labels = np.squeeze(test_labels)
-    else:
-        for i in range(args.num_classes):
-            class_prediction_bag = copy.deepcopy(test_predictions[:, i])
-            class_prediction_bag[test_predictions[:, i] >= thresholds_optimal[i]] = 1
-            class_prediction_bag[test_predictions[:, i] < thresholds_optimal[i]] = 0
-            test_predictions[:, i] = class_prediction_bag
-    y_pred, y_true = inverse_convert_label(test_predictions), inverse_convert_label(test_labels)
+    # y_pred, y_true = inverse_convert_label(test_predictions), inverse_convert_label(test_labels)
 
-    res = binary_metrics_fn(y_true, test_predictions, threshold=thresholds_optimal[0],
-                            metrics=['accuracy', 'precision', 'recall', 'roc_auc'])
+    res = binary_metrics_fn(test_labels, test_predictions,
+                            metrics=['accuracy', 'precision', 'recall', 'roc_auc','f1'])
     acc = res['accuracy']
     p = res['precision']
     r = res['recall']
+    f1 = res['f1']
     c_auc = res['roc_auc']
-    avg = np.mean([p, r, acc])
-    return p, r, acc, avg, c_auc
+    avg = np.mean([p, r, acc, f1])
+    return p, r, acc, f1, avg, c_auc
 
 
 def multi_label_roc(labels, predictions, num_classes):
@@ -315,27 +344,29 @@ def main():
         train_labels, test_labels = np.load(train_labels_pth), np.load(test_labels_pth)
         train_labels, test_labels = torch.Tensor(train_labels).cuda(), torch.Tensor(test_labels).cuda()
 
-        config["rep_num"]=t
-        wandb.init(name='Camelyon_Remix',
-                   project='HDPMIL',
-                   notes='',
-                   mode='online',  # disabled/online/offline
-                   config=config,
-                   tags=[])
+        config["rep"]=t
+        # wandb.init(name='Camelyon_DSMIL',
+        #            project='HDPMIL',
+        #            entity='yihangc',
+        #            notes='',
+        #            mode='online',  # disabled/online/offline
+        #            config=config,
+        #            tags=[])
         for epoch in range(1, args.num_epochs + 1):
             # shuffle data
 
             shuffled_train_idxs = np.random.permutation(len(train_labels))
             train_feats, train_labels = train_feats[shuffled_train_idxs], train_labels[shuffled_train_idxs]
             train_loss_bag = train(train_feats, train_labels, milnet, criterion, optimizer, args, semantic_shifts)
-            precision, recall, accuracy, avg, auc = test(test_feats, test_labels, milnet, criterion, args)
-            wandb.log({'train_loss': train_loss_bag, 'precision': precision, 'recall': recall, 'accuracy': accuracy,
-                       'avg': avg, 'auc': auc})
+            precision, recall, accuracy, f1, avg, auc = test(test_feats, test_labels, milnet, criterion, args)
+            print(f'pre:{precision},recall:{recall},acc:{accuracy},f1:{f1},auc:{auc}.')
+            # wandb.log({'train_loss': train_loss_bag, 'precision': precision, 'recall': recall, 'accuracy': accuracy, 'f1':f1,
+            #            'avg': avg, 'auc': auc})
             logging.info('Epoch [%d/%d] train loss: %.4f' % (epoch, args.num_epochs, train_loss_bag))
             scheduler.step()
-        wandb.finish()
+        # wandb.finish()
 
-        precision, recall, accuracy, avg, auc = test(test_feats, test_labels, milnet, criterion, args)
+        precision, recall, accuracy, f1, avg, auc = test(test_feats, test_labels, milnet, criterion, args)
         torch.save(milnet.state_dict(), ckpt_pth)
         logging.info('Final model saved at: ' + ckpt_pth)
         logging.info(f'Precision, Recall, Accuracy, Avg, AUC')

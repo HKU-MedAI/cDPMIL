@@ -20,7 +20,7 @@ def get_training_and_testing_sets(file_list, split):
 
 def Split_Dataset(dataset,task):
     if task == 'staging':
-        label = pd.read_csv('/data1/WSI/Patches/'+dataset+'/BioData/'+dataset+'_Stage_Label.csv')
+        label = pd.read_csv('/data1/WSI/Patches/Cropped Patches/'+dataset+'/BioData/'+dataset+'_Stage_Label.csv')
         # ignore slides w/o stage labels
         label = label.dropna()
         graph_indices = np.arange(len(label))
@@ -45,8 +45,19 @@ def Split_Dataset(dataset,task):
         np.save('/home/r20user8/Documents/HDPMIL/datasets/'+dataset+'/'+task+'_'+dataset+'_testval_label.npy', testval_label)
 
     elif task == 'binary' and dataset in ['BRCA','COAD']:
-        normal_list = glob.glob(f'/data1/WSI/Patches/{dataset}_Solid_Tissue_Normal_Kimia_20x/*')
-        cancer_list = glob.glob(f'/data1/WSI/Patches/{dataset}_Kimia_20x/*')
+        all_list = glob.glob(f'/data1/WSI/Patches/Features/{dataset}/{dataset}_Tissue_Kimia_20x/*')
+        cancer_list = []
+        normal_list = []
+        for item in all_list:
+            if item[-10:-8] == '01':
+                cancer_list.append(item)
+            elif item[-10:-8] == '11':
+                normal_list.append(item)
+            else:
+                continue
+    else:
+        cancer_list = glob.glob()
+
         randomize_files(normal_list)
         randomize_files(cancer_list)
 
@@ -72,8 +83,8 @@ def Split_Dataset(dataset,task):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='base dictionary construction')
-    parser.add_argument('--dataset', type=str, default='COAD')
-    parser.add_argument('--task',default='binary')
+    parser.add_argument('--dataset', type=str, default='BRCA')
+    parser.add_argument('--task',default='staging')
 
     args = parser.parse_args()
     Split_Dataset(args.dataset,args.task)

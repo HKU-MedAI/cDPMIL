@@ -1,4 +1,5 @@
 import argparse
+import glob
 import os
 
 import copy
@@ -10,31 +11,41 @@ from model.dpmil import HDP_Cluster_EM, DP_Cluster_VI, DP_Classifier, BClassifie
 from collections import Counter
 import random
 import math
+from sklearn.mixture import BayesianGaussianMixture
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 os.environ['CUDA_VISIBLE_DEVICES']='3'
 
 
 def get_feats(train_list, eta_cluster, feat_dim, dataset):
-    total_loss = 0
     for i,feat_pth in tqdm(zip(range(len(train_list)),train_list)):
         if dataset == 'Camelyon':
             bag_feats = np.load(feat_pth)
-            bag_feats = torch.tensor(bag_feats).to(device)
+            # bag_feats = torch.tensor(bag_feats).to(device)
             feat_pth = feat_pth[20:-4]
         else:
             bag_feats = torch.load(feat_pth+'/features.pt')
-            bag_feats = bag_feats.to(device)
-        dp_cluster = HDP_Cluster_EM(n_dps=10, trunc=10, eta=eta_cluster, batch_size=1, epoch=20, dim=feat_dim).to(
-            device)
-        logits = dp_cluster(bag_feats)
-        assignments = torch.argmax(logits, dim=1)
-        # num_cluster = len(torch.unique(assignments))
-        centroids = [torch.mean(bag_feats[assignments == i], dim=0) for i in torch.unique(assignments)]
-        centroids = torch.stack(centroids) # [num_cluster, dim]
-        # centroids = np.array([np.mean(bag_feats[assignments == i], axis=0) for i in range(args.num_prototypes)])
-        # abort invalid features
-        torch.save(centroids,'/home/r20user8/Documents/HDPMIL/datasets/'+dataset+'/HDP_feats/'+feat_pth+'.pt')
+            bag_feats = bag_feats.cpu().numpy()
+            feat_pth = feat_pth[-23:]
+            # bag_feats = bag_feats.to(device)
+        # dp_cluster = HDP_Cluster_EM(n_dps=10, trunc=10, eta=eta_cluster, batch_size=1, epoch=20, dim=feat_dim).to(
+        #     device)
+        # logits = dp_cluster(bag_feats)
+        # assignments = torch.argmax(logits, dim=1)
+        # # num_cluster = len(torch.unique(assignments))
+        # centroids = [torch.mean(bag_feats[assignments == i], dim=0) for i in torch.unique(assignments)]
+        # centroids = torch.stack(centroids) # [num_cluster, dim]
+        for concentration in [0.1]:
+            dp_cluster = BayesianGaussianMixture(n_components=10, random_state=0, max_iter=30)
+            dp_cluster.fit(bag_feats)
+            assignments = dp_cluster.predict(bag_feats)
+            centroids = np.array([np.mean(bag_feats[assignments == i], axis=0) for i in np.unique(assignments)])
+            # centroids = torch.from_numpy(centroids).to(device)
+            # centroids = np.array([np.mean(bag_feats[assignments == i], axis=0) for i in range(args.num_prototypes)])
+            # abort invalid features
+            # if i==0:
+            #     os.mkdir(f'/home/r20user8/Documents/HDPMIL/datasets/{dataset}/DP_EM_feats/Concentration_{concentration}')
+            np.save(f'/home/r20user8/Documents/HDPMIL/datasets/{dataset}/DP_EM_feats/Concentration_{concentration}/{feat_pth}.npy', centroids)
     return
 
 if __name__ == '__main__':
@@ -48,6 +59,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_classes', default=2, type=int, help='Number of total classes in classification task')
     parser.add_argument('--feat_dim', default=512, type=int, help='feature dimension')
     parser.add_argument('--task', default='binary', help='binary cancer/normal classification or staging')
+    parser.add_argument('--split',default=0,help='which split of dataset you want to deal with')
     args = parser.parse_args()
     if args.dataset == 'Camelyon' and args.task == 'binary':
         train_list = f'datasets/{args.dataset}16/remix_processed/train_list.txt'
@@ -57,15 +69,24 @@ if __name__ == '__main__':
         test_list = open(test_list,'r').readlines()
         test_list = [x.split(',')[0] for x in test_list]
     else:
-        train_list = f'datasets/{args.dataset}/{args.task}_{args.dataset}_train.txt'
-        train_list = open(train_list, 'r').readlines()
-        train_list = [x.split('\n')[0] for x in train_list]
-        test_list = f'datasets/{args.dataset}/{args.task}_{args.dataset}_testval.txt'
-        test_list = open(test_list, 'r').readlines()
-        test_list = [x.split('\n')[0] for x in test_list]
+        # all_list = np.load(f'pending_list_{args.split}.npy')
+        # all_list = all_list.tolist()
+        all_list = glob.glob(f'/data1/WSI/Patches/Features/{args.dataset}/{args.dataset}_Tissue_Kimia_20x/*')
+        # exist_list = glob.glob('/home/r20user8/Documents/HDPMIL/datasets/'+args.dataset+'/DP_EM_feats/*')
+        # pending_list = []
+        # for item in all_list:
+        #     flag = 1
+        #     for i in exist_list:
+        #         if item[-23:] in i:
+        #             flag = 0
+        #             break
+        #     if flag:
+        #         pending_list.append(item)
+        pending_list = all_list
 
+
+    print(f'Need to perform DP feat extraction on {len(pending_list)} slides.')
     eta_cluster = 7
-    shuffled_test_idxs = np.random.permutation(len(test_list))
-    test_list = [test_list[index] for index in shuffled_test_idxs]
-    get_feats(test_list,  eta_cluster, args.feat_dim, args.dataset)
-
+    shuffled_idxs = np.random.permutation(len(pending_list))
+    pending_list = [pending_list[index] for index in shuffled_idxs]
+    get_feats(pending_list,  eta_cluster, args.feat_dim, args.dataset)

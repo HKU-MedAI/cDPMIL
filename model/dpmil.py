@@ -77,9 +77,8 @@ class ReparametrizedGaussian_VI(Distribution):
 
 
 class DirichletProcess_VI(nn.Module):
-    def __init__(self, concentration, trunc, eta, batch_size, dim=1024, n_sample=100):
+    def __init__(self, trunc, eta, batch_size, dim=1024, n_sample=100):
         super().__init__()
-        self.alpha = concentration
         self.T = trunc
         self.dim = dim
         self.batch_size = batch_size
@@ -193,16 +192,15 @@ class DirichletProcess_VI(nn.Module):
         pass
 
 
-
-
 class DP_Classifier(nn.Module):
 
-    def __init__(self, concentration, trunc, eta, batch_size, dim=1024, n_sample=100):
+    def __init__(self,  trunc, eta, batch_size, dim=1024, n_sample=100):
         super().__init__()
-        self.dp_process = DirichletProcess_VI(concentration, trunc, eta, batch_size, dim)
+        self.dp_process = DirichletProcess_VI( trunc, eta, batch_size, dim)
 
     def forward(self, x):
         return self.dp_process.infer(x)
+
 
 class ReparametrizedGaussian_EM(Distribution):
     """
@@ -465,11 +463,11 @@ class DP_Cluster_EM(nn.Module):
 
 class DP_Cluster_VI(nn.Module):
 
-    def __init__(self, concentration, trunc, eta, batch_size, epoch, dim=1024, n_sample=100):
+    def __init__(self, trunc, eta, batch_size, epoch, dim=1024, n_sample=100):
         super().__init__()
 
         self.epoch = epoch
-        self.dp_process = DirichletProcess_VI(concentration=concentration,trunc=trunc,eta=eta,batch_size=batch_size,dim=dim)
+        self.dp_process = DirichletProcess_VI(trunc=trunc,eta=eta,batch_size=batch_size,dim=dim)
 
     def forward(self,x):
         optimizer = torch.optim.Adam(self.dp_process.parameters(), lr=1e-2 )
