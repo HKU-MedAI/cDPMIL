@@ -12,4 +12,3 @@ remix_workdir/
 ./dirichlet_process.py
 ./main_HDP_EM_DP_VI.py
 model/dpmil_HDP_EM.py
-Localization/evaluation_python/evaluation_FROC.py
