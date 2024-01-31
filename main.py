@@ -31,7 +31,7 @@ def setup_seed(seed):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.enabled = True
 
-def train(train_list, train_labels, model, criterion, optimizer, eta_cluster, feat_dim, dataset, mode='fix'):
+def train(train_list, train_labels, model, criterion, optimizer, eta_cluster, feat_dim, dataset, comp, mode='fix'):
 
     model.train()
     total_loss = 0
@@ -39,12 +39,16 @@ def train(train_list, train_labels, model, criterion, optimizer, eta_cluster, fe
         if mode == 'fix':
             optimizer.zero_grad()
             if dataset == 'Camelyon':
-                feat_pth = feat_pth[20:-4]+'.npy'
-                centroids = np.load('/home/r20user8/Documents/HDPMIL/datasets/'+dataset+'/DP_EM_feats/'+feat_pth)
+                # feat_pth = feat_pth[20:-4]+'.npy'
+                # feat_pth = feat_pth.split('/')[-1].split('\n')[0]
+                # centroids = np.load(f'/home/r20user8/Documents/HDPMIL/datasets/{dataset}/DP_EM_feats_concentration{concentration}/{feat_pth}.npy')
+                slide_name = feat_pth.split('/')[-1].split('\n')[0]
+                feat_pth = f'/home/r20user8/Documents/HDPMIL/datasets/Camelyon/DP_weighted/{slide_name}.npy'
+                centroids = np.load(feat_pth)
                 centroids = torch.from_numpy(centroids).to(device)
             else:
-                feat_pth = feat_pth[-23:]+'.npy'
-                centroids = np.load(f'/home/r20user8/Documents/HDPMIL/datasets/{dataset}/DP_EM_feats/'+feat_pth)
+                feat_pth = feat_pth.split('/')[-1].split('\n')[0]+'.npy'
+                centroids = np.load(f'/home/r20user8/Documents/HDPMIL/datasets/{dataset}/DP_EM_feats_Comp{comp}/'+feat_pth)
                 centroids = torch.from_numpy(centroids).to(device)
         else:
             optimizer.zero_grad()
@@ -82,7 +86,41 @@ def train(train_list, train_labels, model, criterion, optimizer, eta_cluster, fe
         print('\r Training bag [%d/%d] bag loss: %.4f' % (i, len(train_list), loss.item()))
     return total_loss/len(train_list)
 
-def test_binary(test_list, test_labels, model, criterion, eta_cluster, feat_dim, dataset, mode='fix'):
+def train_revised(train_list, train_labels, model, criterion, optimizer, eta_cluster, feat_dim, dataset, concentration, mode='fix', pool_method='max'):
+
+    model.train()
+    total_loss = 0
+    feats = []
+    labels = []
+    for i,feat_pth,label in tqdm(zip(range(len(train_list)),train_list,train_labels)):
+        if mode == 'fix':
+            optimizer.zero_grad()
+            if dataset == 'Camelyon':
+                # feat_pth = feat_pth[20:-4]+'.npy'
+                # feat_pth = feat_pth.split('/')[-1].split('\n')[0]
+                # centroids = np.load(f'/home/r20user8/Documents/HDPMIL/datasets/{dataset}/DP_EM_feats_concentration{concentration}/{feat_pth}.npy')
+                slide_name = feat_pth.split('\n')[0].split('/')[-1]
+                centroids = np.load(f'/home/r20user8/Documents/HDPMIL/datasets/{dataset}/{pool_method}_pooling/{slide_name}.npy')
+                centroids = torch.from_numpy(centroids).to(device)
+                feats.append(centroids)
+                labels.append(torch.tensor(label))
+    feats = torch.stack(feats).to(device)
+    labels = torch.stack(labels).to(device)
+    bag_prediction = model(feats)
+    # bag_prediction = torch.mean(bag_prediction, axis=0).unsqueeze(0)
+    # MC_num = bag_prediction.shape[0]
+    # bag_label = torch.tensor([label]).to(device)
+    bag_loss = criterion(bag_prediction, labels)
+    loss = bag_loss
+
+    loss.backward()
+    optimizer.step()
+    total_loss = total_loss + loss.item()
+    print('\r Training bag [%d/%d] bag loss: %.4f' % (i, len(train_list), loss.item()))
+    return total_loss/len(train_list)
+
+
+def test_binary(test_list, test_labels, model, criterion, eta_cluster, feat_dim, dataset, comp, mode='fix', pool_method='max'):
     model.eval()
     total_loss = 0
     test_predictions = []
@@ -90,12 +128,18 @@ def test_binary(test_list, test_labels, model, criterion, eta_cluster, feat_dim,
     for i,(feat_pth,label) in enumerate(zip(test_list,test_labels)):
         if mode == 'fix':
             if dataset == 'Camelyon':
-                feat_pth = feat_pth[20:-4]+'.npy'
-                centroids = np.load('/home/r20user8/Documents/HDPMIL/datasets/'+dataset+'/DP_EM_feats/'+feat_pth)
+                # feat_pth = feat_pth[20:-4]+'.npy'
+                # centroids = np.load('/home/r20user8/Documents/HDPMIL/datasets/'+dataset+'/DP_EM_feats/'+feat_pth)
+                # feat_pth = feat_pth.split('/')[-1].split('\n')[0]
+                # centroids = np.load(
+                #     f'/home/r20user8/Documents/HDPMIL/datasets/{dataset}/DP_EM_feats_concentration{concentration}/{feat_pth}.npy')
+                slide_name = feat_pth.split('/')[-1].split('\n')[0]
+                feat_pth = f'/home/r20user8/Documents/HDPMIL/datasets/Camelyon/DP_weighted/{slide_name}.npy'
+                centroids = np.load(feat_pth)
                 centroids = torch.from_numpy(centroids).to(device)
             else:
-                feat_pth = feat_pth[-23:]+'.npy'
-                centroids = np.load(f'/home/r20user8/Documents/HDPMIL/datasets/{dataset}/DP_EM_feats/' + feat_pth)
+                feat_pth = feat_pth.split('/')[-1].split('\n')[0] + '.npy'
+                centroids = np.load(f'/home/r20user8/Documents/HDPMIL/datasets/{dataset}/DP_EM_feats_Comp{comp}/' + feat_pth)
                 centroids = torch.from_numpy(centroids).to(device)
         else:
             if dataset == 'Camelyon':
@@ -155,6 +199,75 @@ def test_binary(test_list, test_labels, model, criterion, eta_cluster, feat_dim,
 
     return p, r, acc, f1, avg, c_auc
 
+def test_binary_revised(test_list, test_labels, model, criterion, eta_cluster, feat_dim, dataset, mode='fix', pool_method='max'):
+    model.eval()
+    total_loss = 0
+    test_predictions = []
+    feats = []
+    labels = []
+
+    for i,(feat_pth,label) in enumerate(zip(test_list,test_labels)):
+        if mode == 'fix':
+            if dataset == 'Camelyon':
+                # feat_pth = feat_pth[20:-4]+'.npy'
+                # centroids = np.load('/home/r20user8/Documents/HDPMIL/datasets/'+dataset+'/DP_EM_feats/'+feat_pth)
+                # feat_pth = feat_pth.split('/')[-1].split('\n')[0]
+                # centroids = np.load(
+                #     f'/home/r20user8/Documents/HDPMIL/datasets/{dataset}/DP_EM_feats_concentration{concentration}/{feat_pth}.npy')
+                slide_name = feat_pth.split('\n')[0].split('/')[-1]
+                centroids = np.load(
+                    f'/home/r20user8/Documents/HDPMIL/datasets/{dataset}/{pool_method}_pooling/{slide_name}.npy')
+                centroids = torch.from_numpy(centroids).to(device)
+            else:
+                feat_pth = feat_pth[-23:]+'.npy'
+                centroids = np.load(
+                    f'/home/r20user8/Documents/HDPMIL/datasets/{dataset}/DP_EM_feats_concentration{concentration}/' + feat_pth)
+                centroids = torch.from_numpy(centroids).to(device)
+
+            feats.append(centroids)
+            labels.append(torch.tensor(label))
+
+    feats = torch.stack(feats).to(device)
+    labels = torch.stack(labels).to(device)
+
+    with torch.no_grad():
+        bag_prediction = model(feats)
+        loss = criterion(bag_prediction,labels)
+        total_loss = total_loss + loss.item()
+        print('\r Testing bag [%d/%d] bag loss: %.4f' % (i, len(test_list), loss.item()))
+        test_predictions = torch.nn.Softmax(dim=1)(bag_prediction)
+        # test_predictions.append(prob.squeeze().cpu().numpy())
+
+    test_predictions = np.array(test_predictions.cpu())
+    test_predictions = test_predictions[:,1]
+    _, _, thresholds_optimal = multi_label_roc(test_labels, test_predictions, 1)
+
+    # a = test_predictions
+
+    # class_prediction_bag = copy.deepcopy(test_predictions)
+    # class_prediction_bag[test_predictions >= thresholds_optimal[0]] = 1
+    # class_prediction_bag[test_predictions < thresholds_optimal[0]] = 0
+    # test_predictions = class_prediction_bag
+    # test_labels = np.squeeze(test_labels)
+    y_pred, y_true = inverse_convert_label(test_predictions), inverse_convert_label(test_labels)
+
+    res = binary_metrics_fn(y_true, test_predictions,
+                            metrics=['accuracy', 'precision', 'recall', 'roc_auc', 'f1'])
+    acc = res['accuracy']
+    p = res['precision']
+    r = res['recall']
+    c_auc = res['roc_auc']
+    f1 = res['f1']
+    # p = precision_score(y_true, y_pred, average='macro')
+    # r = recall_score(y_true, y_pred, average='macro')
+    # acc = accuracy_score(y_true, y_pred)
+    avg = np.mean([p, r, acc, f1])
+    # c_auc = roc_auc_score(y_true, y_pred)
+
+
+    return p, r, acc, f1, avg, c_auc
+
+
 def test_multiclass(test_list, test_labels, model, criterion, eta_cluster, feat_dim, dataset):
     model.eval()
     total_loss = 0
@@ -168,7 +281,7 @@ def test_multiclass(test_list, test_labels, model, criterion, eta_cluster, feat_
                 centroids = torch.from_numpy(centroids).to(device)
             else:
                 feat_pth = feat_pth[-23:]+'.npy'
-                centroids = np.load(f'/home/r20user8/Documents/HDPMIL/datasets/{dataset}/DP_EM_feats/' + feat_pth)
+                centroids = np.load(f'/home/r20user8/Documents/HDPMIL/datasets/{dataset}/DP_EM_feats_concentration{concentration}/'+feat_pth)
                 centroids = torch.from_numpy(centroids).to(device)
 
         else:
@@ -369,18 +482,40 @@ if __name__ == '__main__':
     parser.add_argument('--num_classes', default=2, type=int, help='Number of total classes in classification task')
     parser.add_argument('--feat_dim', default=512, type=int, help='feature dimension')
     parser.add_argument('--task', default='binary', help='binary cancer/normal classification or staging')
+    parser.add_argument('--rep', default=1, type=int, help='number of repeat experiments')
+    parser.add_argument('--pool_method', default='max', help='pooling method')
     args = parser.parse_args()
     if args.dataset == 'Camelyon' and args.task == 'binary':
-        train_list = f'datasets/{args.dataset}16/remix_processed/train_list.txt'
+        # train_list = f'datasets/{args.dataset}16/remix_processed/train_list.txt'
+        train_list = f'datasets/{args.dataset}/{args.task}_{args.dataset}_train.txt'
         train_list = open(train_list, 'r').readlines()
         train_list = [x.split(',')[0] for x in train_list]  # file names
-        train_labels_pth = f'datasets/{args.dataset}16/remix_processed/train_bag_labels.npy'
+        # train_labels_pth = f'datasets/{args.dataset}16/remix_processed/train_bag_labels.npy'
+        train_labels_pth = f'datasets/{args.dataset}/{args.task}_{args.dataset}_train_label.npy'
         train_label = np.load(train_labels_pth)
-        test_list = f'datasets/{args.dataset}16/remix_processed/test_list.txt'
+        # test_list = f'datasets/{args.dataset}16/remix_processed/test_list.txt'
+        test_list = f'datasets/{args.dataset}/{args.task}_{args.dataset}_testval.txt'
         test_list = open(test_list,'r').readlines()
         test_list = [x.split(',')[0] for x in test_list]
-        test_labels_pth = f'datasets/{args.dataset}16/remix_processed/test_bag_labels.npy'
+        # test_labels_pth = f'datasets/{args.dataset}16/remix_processed/test_bag_labels.npy'
+        test_labels_pth = f'datasets/{args.dataset}/{args.task}_{args.dataset}_testval_label.npy'
         test_label = np.load(test_labels_pth)
+
+    elif args.dataset == 'ESCA' and args.task == 'subtyping':
+        train_list = f'datasets/{args.dataset}/{args.task}_{args.dataset}_train.txt'
+        train_list = open(train_list, 'r').readlines()
+        train_list = [x.split(',')[0] for x in train_list]  # file names
+        # train_labels_pth = f'datasets/{args.dataset}16/remix_processed/train_bag_labels.npy'
+        train_labels_pth = f'datasets/{args.dataset}/{args.task}_{args.dataset}_train_label.npy'
+        train_label = np.load(train_labels_pth)
+        # test_list = f'datasets/{args.dataset}16/remix_processed/test_list.txt'
+        test_list = f'datasets/{args.dataset}/{args.task}_{args.dataset}_testval.txt'
+        test_list = open(test_list, 'r').readlines()
+        test_list = [x.split(',')[0] for x in test_list]
+        # test_labels_pth = f'datasets/{args.dataset}16/remix_processed/test_bag_labels.npy'
+        test_labels_pth = f'datasets/{args.dataset}/{args.task}_{args.dataset}_testval_label.npy'
+        test_label = np.load(test_labels_pth)
+
     else:
         train_list = f'datasets/{args.dataset}/{args.task}_{args.dataset}_train.txt'
         train_list = open(train_list, 'r').readlines()
@@ -398,49 +533,52 @@ if __name__ == '__main__':
     lr = 0.01
     eta_classifier = 10
     num_cluster = 10
-    config = {"num_cluster":10,"eta_classifier":1,"lr":lr,"rep":0}
+    config = {"num_cluster":10,"eta_classifier":1,"lr":lr,"rep":0,"n_comp":10}
     mode = 'fix'
     for eta_cluster in [7]:
         for eta_classifier in [10]:
-            for rep in range(5):
+            for n_comp in [10]:
+                for rep in range(args.rep):
     # for lr in [ # for (eta_classifier,eta_cluster)=(5,5)
     #     0.00005, 0.0001, 0.0005, 0.001, 0.01, 0.1, 1
     # ]:
     #         config["eta_cluster"] = eta_cluster
     #         config["eta_classifier"] = eta_classifier
     #             else:
-                config["eta_classifier"] = eta_classifier
-                config["num_cluster"] = num_cluster
-                config["rep"] = rep
-                wandb.init(name=args.dataset+'_HDPMIL_DP(skl)+DP(VI)_'+args.task,
-                           project='HDPMIL',
-                           entity='yihangc',
-                           notes='',
-                           mode='online', # disabled/online/offline
-                           config=config,
-                           tags=[])
-                # model = BClassifier(input_size=args.feat_dim,num_classes=args.num_classes).to(device)
-                model = DP_Classifier(trunc=args.num_classes,eta=eta_classifier,batch_size=1,dim=args.feat_dim,n_sample=1).to(device)
-                # model = HDP_binary_classifier(concentration=0.1,trunc=2, eta=1, batch_size=1, MC_num=100, dim=512, n_sample=1).to(device)
-                criterion = torch.nn.CrossEntropyLoss()
-                optimizer = torch.optim.Adam(model.parameters(), lr=lr, betas=(0.5, 0.9), weight_decay=args.weight_decay)
-                scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.num_epochs, 0.000005)
-                for epoch in range(args.num_epochs):
-                    shuffled_train_idxs = np.random.permutation(len(train_label))
-                    train_list, train_label = [train_list[index] for index in shuffled_train_idxs], train_label[shuffled_train_idxs]
-                    train_loss_bag = train(train_list, train_label, model, criterion, optimizer, eta_cluster, args.feat_dim, args.dataset, mode)
-                    if args.task == 'binary':
-                        precision, recall, accuracy, f1, avg, auc = test_binary(test_list, test_label, model, criterion, eta_cluster, args.feat_dim, args.dataset, mode)
-                        wandb.log({'train_loss': train_loss_bag, 'precision': precision, 'recall': recall, 'accuracy': accuracy, 'f1':f1,
-                                   'avg': avg, 'auc': auc})
-                    elif args.task=='staging':
-                        accuracy, f1, auc = test_multiclass(test_list, test_label, model, criterion, eta_cluster, args.feat_dim, args.dataset)
-                        wandb.log({'accuracy': accuracy, 'f1': f1, 'auc': auc})
-                    # print('Epoch [%d/%d] train loss: %.4f' % (epoch, args.num_epochs, train_loss_bag))
-                    scheduler.step()
+                    config["eta_classifier"] = eta_classifier
+                    config["num_cluster"] = num_cluster
+                    config["rep"] = rep
+                    config["n_comp"] = n_comp
+                    wandb.init(name=args.dataset+'_HDPMIL_DP_EM(skl)_weighted+DP(VI)_'+args.task,
+                               project='HDPMIL',
+                               entity='yihangc',
+                               notes='',
+                               mode='online', # disabled/online/offline
+                               config=config,
+                               tags=[])
+                    # model = BClassifier(input_size=args.feat_dim,num_classes=args.num_classes).to(device)
+                    model = DP_Classifier(trunc=args.num_classes,eta=eta_classifier,batch_size=1,dim=args.feat_dim,n_sample=1).to(device)
+                    # model = HDP_binary_classifier(concentration=0.1,trunc=2, eta=1, batch_size=1, MC_num=100, dim=512, n_sample=1).to(device)
+                    criterion = torch.nn.CrossEntropyLoss()
+                    optimizer = torch.optim.Adam(model.parameters(), lr=lr, betas=(0.5, 0.9), weight_decay=args.weight_decay)
+                    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.num_epochs, 0.000005)
+                    for epoch in range(args.num_epochs):
+                        shuffled_train_idxs = np.random.permutation(len(train_label))
+                        train_list, train_label = [train_list[index] for index in shuffled_train_idxs], train_label[shuffled_train_idxs]
+                        train_loss_bag = train(train_list, train_label, model, criterion, optimizer, eta_cluster, args.feat_dim, args.dataset, n_comp, mode)
+                        if args.task == 'binary' or args.task == 'subtyping':
+                            precision, recall, accuracy, f1, avg, auc = test_binary(test_list, test_label, model, criterion, eta_cluster, args.feat_dim, args.dataset, n_comp, mode)
+                            # print(f"precision:{precision}, recall:{recall}, acc:{accuracy}, f1:{f1}, auc:{auc}.")
+                            wandb.log({'train_loss': train_loss_bag, 'precision': precision, 'recall': recall, 'accuracy': accuracy, 'f1':f1,
+                                       'avg': avg, 'auc': auc})
+                        elif args.task=='staging':
+                            accuracy, f1, auc = test_multiclass(test_list, test_label, model, criterion, eta_cluster, args.feat_dim, args.dataset)
+                            wandb.log({'accuracy': accuracy, 'f1': f1, 'auc': auc})
+                        # print('Epoch [%d/%d] train loss: %.4f' % (epoch, args.num_epochs, train_loss_bag))
+                        scheduler.step()
 
-                            # train(train_list, train_label, model, criterion, optimizer)
-                            # precision, recall, accuracy, avg, auc = test(test_list, test_label, model, criterion)
-                            # print(f'Precision, Recall, Accuracy, Avg, AUC')
-                            # print((f'{precision*100:.2f} {recall*100:.2f} {accuracy*100:.2f} {avg*100:.2f} {auc*100:.2f}'))
-                wandb.finish()
+                                # train(train_list, train_label, model, criterion, optimizer)
+                                # precision, recall, accuracy, avg, auc = test(test_list, test_label, model, criterion)
+                                # print(f'Precision, Recall, Accuracy, Avg, AUC')
+                                # print((f'{precision*100:.2f} {recall*100:.2f} {accuracy*100:.2f} {avg*100:.2f} {auc*100:.2f}'))
+                    wandb.finish()

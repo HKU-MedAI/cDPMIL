@@ -4,7 +4,7 @@ import cv2
 import os
 import numpy as np
 import torch
-import multiresolutionimageinterface as mir
+# import multiresolutionimageinterface as mir
 
 def convert():
     CAMELYON_ANNOTATION_DIR = '/data1/WSI/Camelyon16/lesion_annotation'
@@ -34,6 +34,7 @@ def convert():
             img_anno = img_anno.reshape(
                 (h // (2**level), w // (2**level)))
             img_anno = img_anno // 255
+
             np.save(f'{CAMELYON_ANNOTATION_DIR}/{slide_id}.npy',img_anno)
         # img_anno = torch.tensor(img_anno)
 
@@ -54,23 +55,41 @@ def get_coordinates(annotation_file):
         polygons.append(np.array(poly_coordinates, dtype=int))
     return polygons
 
-def convert1():
-    CAMELYON_ANNOTATION_DIR = '/data1/WSI/Camelyon16/lesion_annotation'
-    annotation_lists = glob.glob('/data1/WSI/Camelyon16/lesion_annotation/*.xml')
-    for tiff_file, annotation_list in all_slides,annotation_lists:
-        reader = mir.MultiResolutionImageReader()
-        mr_image = reader.open(tiff_file)
-        assert mr_image is not None
-        annotation_list = mir.AnnotationList()
-        xml_repository = mir.XmlRepository(annotation_list)
-        xml_repository.setSource(xml_file)
-        xml_repository.load()
-        annotation_mask = mir.AnnotationToMask()
-        camelyon17_type_mask = False
-        monitor=mir.CmdLineProgressMonitor()
-        annotation_mask.setProgressMonitor(monitor)
-        label_map = {'metastases': 255, 'normal': 0} if camelyon17_type_mask else {'_0': 255, '_1': 255, 'Tumor':255, '_2': 0, 'None':0,'Exclusion':0}
-        conversion_order = ['metastases', 'normal'] if camelyon17_type_mask else  ['_0', '_1', 'Tumor','_2','None','Exclusion']
-        annotation_mask.convert(annotation_list, output_path, mr_image.getDimensions(), mr_image.getSpacing(), label_map, conversion_order)
+def get_coordinates1(annotation_file):
+    DOMTree = xml.dom.minidom.parse(annotation_file)
+    collection = DOMTree.documentElement
+    coordinatess = collection.getElementsByTagName("Coordinates")
+    annotationss = collection.getElementsByTagName("Annotation")
+    polygons = []
+    for coordinates,annotations in zip(coordinatess,annotationss):
+        if annotations.getAttribute('PartOfGroup') in ['_0','_1','_2','Tumor']:
+            coordinate = coordinates.getElementsByTagName("Coordinate")
+            poly_coordinates = []
+            for point in coordinate:
+                x = point.getAttribute("X")
+                y = point.getAttribute("Y")
+                poly_coordinates.append([float(x), float(y)])
+            polygons.append(np.array(poly_coordinates, dtype=int))
+    return polygons
+import multiresolutionimageinterface as mir
+# def convert1():
+#     annotation_lists = glob.glob('/data1/WSI/Camelyon16/lesion_annotation/*.xml')
+#     img_dir = '/data1/WSI/Camelyon16/CAMELYON16/testing/images'
+#     for annotation_list in annotation_lists:
+#         slide_name = annotation_list.split('/')[-1].split('.')[0]
+#         reader = mir.MultiResolutionImageReader()
+#         mr_image = reader.open(os.path.join(img_dir,slide_name+'.tif'))
+#         assert mr_image is not None
+#         annotation_list = mir.AnnotationList()
+#         xml_repository = mir.XmlRepository(annotation_list)
+#         xml_repository.setSource(xml_file)
+#         xml_repository.load()
+#         annotation_mask = mir.AnnotationToMask()
+#         camelyon17_type_mask = False
+#         monitor=mir.CmdLineProgressMonitor()
+#         annotation_mask.setProgressMonitor(monitor)
+#         label_map = {'metastases': 255, 'normal': 0} if camelyon17_type_mask else {'_0': 255, '_1': 255, 'Tumor':255, '_2': 0, 'None':0,'Exclusion':0}
+#         conversion_order = ['metastases', 'normal'] if camelyon17_type_mask else  ['_0', '_1', 'Tumor','_2','None','Exclusion']
+#         annotation_mask.convert(annotation_list, output_path, mr_image.getDimensions(), mr_image.getSpacing(), label_map, conversion_order)
 
-convert1()
+convert()

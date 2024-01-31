@@ -15,6 +15,7 @@ from skimage import measure
 import os
 import sys
 import glob
+from PIL import Image
 
    
 def computeEvaluationMask(maskDIR, resolution, level):
@@ -80,14 +81,18 @@ def readCSVContent(csvDIR):
         Xcorr:      list of X-coordinates of the lesions
         Ycorr:      list of Y-coordinates of the lesions
     """
-    Xcorr, Ycorr, Probs = ([] for i in range(3))
+    Xcorr, Ycorr, Logits = ([] for i in range(3))
     csv_lines = open(csvDIR,"r").readlines()
     for i in range(1,len(csv_lines)):
         line = csv_lines[i]
         elems = line.rstrip().split(',')
-        Probs.append(float(elems[3]))
+        Logits.append(float(elems[3]))
+        # Probs.append(round(1/(1+np.exp(-float(elems[3]))),4))
         Xcorr.append(int(elems[1]))
         Ycorr.append(int(elems[2]))
+    Logits = np.array(Logits)
+    Logits = (Logits-np.mean(Logits))/np.std(Logits)
+    Probs = [round(1/(1+np.exp(-float(Logits[i]))),2) for i in range(len(Logits))]
     return Probs, Xcorr, Ycorr
     
          
@@ -212,8 +217,8 @@ def plotFROC(total_FPs, total_sensitivity):
     
 if __name__ == "__main__":
 
-    mask_folder = glob.glob("/data1/WSI/Camelyon16/lesion_annotation/*.xml")
-    result_folder = "/data1/WSI/Patches/Features/Camelyon16/simclr_files/testing"
+    mask_folder = glob.glob("/data1/WSI/Camelyon16/lesion_annotation/*.tif")
+    result_folder = "/data1/WSI/Patches/Features/Camelyon16/simclr_files_256_v2/testing"
     result_file_list = []
     result_file_list += [each for each in os.listdir(result_folder) if each.endswith('.csv')]
     with open('/home/r20user8/Documents/HDPMIL/datasets/Camelyon16/remix_processed/test_list.txt') as f:
@@ -234,15 +239,22 @@ if __name__ == "__main__":
         slide_name = case.split('/')[-1].split('.')[0]
         print ('Evaluating Performance on image:', slide_name)
         sys.stdout.flush()
-        csvDIR = os.path.join(result_folder, slide_name, 'coor_prob.csv')
+        csvDIR = os.path.join(result_folder, slide_name, 'coor_logit_DP.csv')
         Probs, Xcorr, Ycorr  = readCSVContent(csvDIR)
                 
         # is_tumor = case[0:5] == 'Tumor'
         is_tumor = labels[slide_name]
         if (is_tumor):
-            # maskDIR = os.path.join(mask_folder, case[0:-4]) + '_Mask.tif'
-            # evaluation_mask = computeEvaluationMask(maskDIR, L0_RESOLUTION, EVALUATION_MASK_LEVEL)
-            evaluation_mask = np.load(f"/data1/WSI/Camelyon16/lesion_annotation/{slide_name}.npy")
+            # # maskDIR = os.path.join(mask_folder, case[0:-4]) + '_Mask.tif'
+            # # evaluation_mask = computeEvaluationMask(maskDIR, L0_RESOLUTION, EVALUATION_MASK_LEVEL)
+            # evaluation_mask = np.load(f"/data1/WSI/Camelyon16/lesion_annotation/{slide_name}.npy")
+            # # evaluation_mask = Image.open(f"/home/r20user8/Documents/HDPMIL/evaluation_masks/tumor_101_evaluation_mask.png")
+            # # evaluation_mask = np.array(evaluation_mask)
+            # ITC_labels = computeITCList(evaluation_mask, L0_RESOLUTION, EVALUATION_MASK_LEVEL)
+
+            maskDIR = os.path.join(f"/data1/WSI/Camelyon16/lesion_annotation/{slide_name}.tif")
+            evaluation_mask = computeEvaluationMask(maskDIR, L0_RESOLUTION, EVALUATION_MASK_LEVEL)
+            np.save(f"/data1/WSI/Camelyon16/lesion_annotation/{slide_name}_eval_mask.npy",evaluation_mask)
             ITC_labels = computeITCList(evaluation_mask, L0_RESOLUTION, EVALUATION_MASK_LEVEL)
         else:
             evaluation_mask = 0

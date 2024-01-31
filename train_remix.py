@@ -44,24 +44,26 @@ def get_bag_feats_v2(feats, bag_label, args):
     return bag_label, feats
 
 
-def get_bag_feats_v1(feats, bag_label, args):
+def get_bag_feats_v1(feats, bag_label, args=None):
     if isinstance(feats, str):
         # if feats is a path, load it
         slide_name = feats.split('/')[-1].split('.')[0]
+        # slide_name = feats.split('/')[-1].split('\n')[0]
         if 'test' not in slide_name:
-            feat_pth = f'/data1/WSI/Patches/Features/Camelyon16/simclr_files/traning/{slide_name}/features.pt'
+            feat_pth = f'/data1/WSI/Patches/Features/Camelyon16/simclr_files_256_v2/training/{slide_name}/features.pt'
         else:
-            feat_pth = f'/data1/WSI/Patches/Features/Camelyon16/simclr_files/testing/{slide_name}/features.pt'
-        feats = torch.load(feat_pth)
+            feat_pth = f'/data1/WSI/Patches/Features/Camelyon16/simclr_files_256_v2/testing/{slide_name}/features.pt'
+        # feat_pth = f'/home/r20user8/Documents/HDPMIL/datasets/Camelyon/DP_EM_feats_concentration0.1/{slide_name}.npy'
+        feats = torch.load(feat_pth).cuda()
 
 
-    feats = feats[np.random.permutation(len(feats))]
-    if args.num_classes != 1:
-        # mannual one-hot encoding, following dsmil
-        label = np.zeros(args.num_classes)
-        if int(bag_label) <= (len(label) - 1):
-            label[int(bag_label)] = 1
-        bag_label = Variable(torch.FloatTensor([label]).cuda())
+    # feats = feats[np.random.permutation(len(feats))]
+    # if args.num_classes != 1:
+    #     # mannual one-hot encoding, following dsmil
+    #     label = np.zeros(args.num_classes)
+    #     if int(bag_label) <= (len(label) - 1):
+    #         label[int(bag_label)] = 1
+    #     bag_label = Variable(torch.FloatTensor([label]).cuda())
 
     return bag_label, feats
 
@@ -263,7 +265,7 @@ def main():
     parser = argparse.ArgumentParser(description='Train MIL Models with ReMix')
     parser.add_argument('--feats_size', default=512, type=int, help='Dimension of the feature size [512]')
     parser.add_argument('--lr', default=0.0002, type=float, help='Initial learning rate [0.0002]')
-    parser.add_argument('--num_epochs', default=50, type=int, help='Number of total training epochs')
+    parser.add_argument('--num_epochs', default=200, type=int, help='Number of total training epochs')
     parser.add_argument('--gpu_index', type=int, nargs='+', default=(0, ), help='GPU ID(s) [0]')
     parser.add_argument('--weight_decay', default=5e-3, type=float, help='Weight decay [5e-3]')
     parser.add_argument('--dataset', default='Camelyon', type=str,
@@ -280,7 +282,7 @@ def main():
     # Utils
     parser.add_argument('--exp_name', required=True, help='exp_name')
     parser.add_argument('--data_root', required=False, default='datasets', type=str, help='path to data root')
-    parser.add_argument('--num_repeats', default=10, type=int, help='Number of repeats')
+    parser.add_argument('--num_repeats', default=1, type=int, help='Number of repeats')
     args = parser.parse_args()
     
     assert args.dataset in ['Camelyon', 'Unitopatho', 'COAD'], 'Dataset not supported'
@@ -289,16 +291,21 @@ def main():
     args.num_classes = {'Camelyon': 1, 'Unitopatho': 6, 'COAD':1}[args.dataset]
     train_labels_pth = f'{args.data_root}/{args.dataset}16/remix_processed/train_bag_labels.npy'
     test_labels_pth = f'{args.data_root}/{args.dataset}16/remix_processed/test_bag_labels.npy'
-
+    # train_labels_pth = f'/home/r20user8/Documents/HDPMIL/datasets/Camelyon/binary_Camelyon_train_label.npy'
+    # test_labels_pth = f'/home/r20user8/Documents/HDPMIL/datasets/Camelyon/binary_Camelyon_testval_label.npy'
     # loading the list of test data
     test_feats = open(f'{args.data_root}/{args.dataset}16/remix_processed/test_list.txt', 'r').readlines()
     test_feats = np.array(test_feats)
-    
+    #
+    # test_feats = open(f'/home/r20user8/Documents/HDPMIL/datasets/Camelyon/binary_Camelyon_testval.txt', 'r').readlines()
+    # test_feats = np.array(test_feats)
+
     # use first_time to avoid duplicated logs
     first_time = True
-    config = {"lr": args.lr, "rep_num": 100}
+    config = {"lr": args.lr, "rep": 0}
     for t in range(args.num_repeats):
-        ckpt_pth = setup_logger(args, first_time)
+        # ckpt_pth = setup_logger(args, first_time)
+        ckpt_pth = '/home/r20user8/Documents/HDPMIL/DSMIL_v2.pth'
         logging.info(f'current args: {args}')
         logging.info(f'augmentation mode: {args.mode}')
 
@@ -338,6 +345,9 @@ def main():
             # when train_feats is None, loading them directly from the dataset npy folder.
             train_feats = open(f'{args.data_root}/{args.dataset}16/remix_processed/train_list.txt', 'r').readlines()
             train_feats = np.array(train_feats)
+
+            # train_feats = open(f'/home/r20user8/Documents/HDPMIL/datasets/Camelyon/binary_Camelyon_train.txt', 'r').readlines()
+            # train_feats = np.array(train_feats)
             semantic_shifts = None
             
         # loading labels
@@ -345,13 +355,14 @@ def main():
         train_labels, test_labels = torch.Tensor(train_labels).cuda(), torch.Tensor(test_labels).cuda()
 
         config["rep"]=t
-        # wandb.init(name='Camelyon_DSMIL',
-        #            project='HDPMIL',
-        #            entity='yihangc',
-        #            notes='',
-        #            mode='online',  # disabled/online/offline
-        #            config=config,
-        #            tags=[])
+        wandb.init(name='Camelyon_DSMIL_V2_256',
+                   project='HDPMIL',
+                   entity='yihangc',
+                   notes='',
+                   mode='online',  # disabled/online/offline
+                   config=config,
+                   tags=[])
+        best_acc = 0
         for epoch in range(1, args.num_epochs + 1):
             # shuffle data
 
@@ -360,11 +371,15 @@ def main():
             train_loss_bag = train(train_feats, train_labels, milnet, criterion, optimizer, args, semantic_shifts)
             precision, recall, accuracy, f1, avg, auc = test(test_feats, test_labels, milnet, criterion, args)
             print(f'pre:{precision},recall:{recall},acc:{accuracy},f1:{f1},auc:{auc}.')
-            # wandb.log({'train_loss': train_loss_bag, 'precision': precision, 'recall': recall, 'accuracy': accuracy, 'f1':f1,
-            #            'avg': avg, 'auc': auc})
+            wandb.log({'train_loss': train_loss_bag, 'precision': precision, 'recall': recall, 'accuracy': accuracy, 'f1':f1,
+                       'avg': avg, 'auc': auc})
             logging.info('Epoch [%d/%d] train loss: %.4f' % (epoch, args.num_epochs, train_loss_bag))
             scheduler.step()
-        # wandb.finish()
+            if accuracy >= best_acc:
+                print('saving model...')
+                best_acc = accuracy
+                torch.save(milnet.state_dict(), ckpt_pth)
+        wandb.finish()
 
         precision, recall, accuracy, f1, avg, auc = test(test_feats, test_labels, milnet, criterion, args)
         torch.save(milnet.state_dict(), ckpt_pth)
