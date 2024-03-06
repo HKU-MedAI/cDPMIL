@@ -2,21 +2,28 @@ import glob
 import os.path
 import shutil
 
+import numpy as np
 import torch
 
 
-dataset = "ESCA"
-wsi_path = "/data1/WSI/Patches/Features/"+dataset+"/"+dataset+"_Tissue_Kimia_20x/*"
-des_path = "/data1/WSI/Patches/Features/"+dataset+"/"+dataset+"_Tissue_Kimia_20x_Little"
+dataset = 'LUSC'
+wsi_path = "/data1/WSI/Patches/Features/"+dataset+"/"+dataset+"_Kimia_20x/*"
+# wsi_path = '/data1/WSI/Patches/Features/Camelyon16/simclr_files_256_v2/*/*'
+des_path = "/data1/WSI/Patches/Features/"+dataset+"/"+dataset+"_Kimia_20x_Little"
 wsi_dirs = glob.glob(wsi_path)
+# for i in wsi_path:
+#     wsi_dirs.extend(glob.glob(i))
 
 little_wsi = list()
+node_nums = []
 for wsi in wsi_dirs:
     feature_path = os.path.join(wsi, 'features.pt')
     features = torch.load(feature_path, map_location=lambda storage, loc: storage)
     node_num = features.shape[0]
-    if node_num <= 100:
+    node_nums.append(node_num)
+    if node_num <= 30:
         little_wsi.append(wsi)
+# print(np.mean(node_nums))
 
 if not os.path.exists(des_path):
     os.mkdir(des_path)

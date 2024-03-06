@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" autoUpload="Always" serverName="r20user8@research20.saas.hku.hk:22 (3)" remoteFilesAllowedToDisappearOnAutoupload="false">
+  <component name="PublishConfigData" autoUpload="Always" serverName="yhchen@research20.saas.hku.hk:22" remoteFilesAllowedToDisappearOnAutoupload="false">
     <serverData>
       <paths name="r10user8@research10.saas.hku.hk:22 (2)">
         <serverdata>
@@ -40,7 +40,21 @@
       <paths name="r20user8@research20.saas.hku.hk:22 (3)">
         <serverdata>
           <mappings>
-            <mapping deploy="/home/r20user8/Documents/HDPMIL" local="$PROJECT_DIR$" />
+            <mapping deploy="/home/yhchen/Documents/HDPMIL" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="r20user8@research20.saas.hku.hk:22 password">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="yhchen@research20.saas.hku.hk:22">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/yhchen/Documents/HDPMIL" local="$PROJECT_DIR$" />
           </mappings>
         </serverdata>
       </paths>

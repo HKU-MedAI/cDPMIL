@@ -10,10 +10,22 @@ from torch.distributions import Beta, Categorical, Uniform, MultivariateNormal, 
 from scipy.stats import beta
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
+from model.dsmil import FCLayer
 
 
 from abc import ABCMeta, abstractmethod
 
+
+class MLP(nn.Module):
+    def __init__(self, in_size, out_size=1):
+        super(MLP, self).__init__()
+        self.fc = nn.Sequential(nn.Linear(in_size, int(in_size/2/2)),
+                                nn.ReLU(True),
+                                nn.Linear(int(in_size/2/2),out_size))
+
+    def forward(self, feats):
+        x = self.fc(feats)
+        return x
 
 class Distribution(metaclass=ABCMeta):
     @abstractmethod
@@ -199,6 +211,7 @@ class DP_Classifier(nn.Module):
         self.dp_process = DirichletProcess_VI( trunc, eta, batch_size, dim)
 
     def forward(self, x):
+        # neg_likelyhood = -self.dp_process(x)
         return self.dp_process.infer(x)
 
 
@@ -649,3 +662,63 @@ class HDP_Cluster_EM(nn.Module):
         for i in range(self.epoch):
             self.hdp(x)
         return self.hdp.inference(x)
+
+
+class HDP_classifier(nn.Module): #only eta
+    def __init__(self, num_cluster, eta_cluster, eta_classifier, batch_size, num_class=2, dim=1024, n_sample=100):
+        super().__init__()
+        self.D_P_cluster = DirichletProcess_VI(num_cluster,eta_cluster,batch_size,dim,n_sample)
+        self.num_class = num_class
+        self.D_P_clssfy = DirichletProcess_VI(num_class,eta_classifier,batch_size,dim,n_sample)
+
+    def forward(self,x):
+
+        cluster_loss = -self.D_P_cluster(x)
+        optimizer = torch.optim.Adam(self.D_P_cluster.parameters(), lr=1e-2)
+        # train_losses = []
+        for i in range(20):
+            self.D_P_cluster.train()
+            train_loss = -self.D_P_cluster(x)
+            # train_losses.append(train_loss.cpu().detach().numpy())
+            optimizer.zero_grad()
+            train_loss.backward()
+            optimizer.step()
+
+        cluster_logits = self.D_P_cluster.infer(x)
+
+        # m = nn.Softmax(dim=1)
+        # cluster_prob = m(cluster_logits).float()
+
+        assignments = torch.argmax(cluster_logits, dim=1)
+        centroids = [torch.mean(x[assignments == i], dim=0) for i in torch.unique(assignments)]
+        centroids = torch.stack(centroids)
+        # centroids = torch.mm(torch.t(cluster_prob),x)
+
+        bag_prediction = self.D_P_clssfy.infer(centroids.float())
+
+        bag_prediction = torch.mean(bag_prediction, dim=0).unsqueeze(0)
+
+
+        return bag_prediction, cluster_loss
+
+class HDP_MIL(nn.Module):
+    def __init__(self, num_cluster, eta_cluster, eta_classifier, batch_size, num_class=2, dim=1024,
+                 n_sample=100):
+        super().__init__()
+        if num_class == 2:
+            self.ins_operator = FCLayer(dim,out_size=1)
+        else:
+            self.ins_operator = FCLayer(dim,out_size=num_class)
+        self.bag_operator1 = DP_Cluster_VI(2,3,1,100,1,100)
+        self.bag_operator = HDP_classifier(num_cluster=num_cluster,eta_cluster=eta_cluster,eta_classifier=eta_classifier,batch_size=batch_size,num_class=num_class,dim=dim,n_sample=n_sample)
+
+    def forward(self,x):
+
+        x, classes = self.ins_operator(x)
+        _, key_indices = torch.sort(classes, 0, descending=True) # sort class scores along the instance dimension, m_indices in shape N x C
+        m_feats = torch.index_select(x, dim=0, index=key_indices[0, :])
+        m_feats = m_feats.view(-1,1)
+        bag_prediction, cluster_loss = self.bag_operator(m_feats.float())
+
+        return bag_prediction, cluster_loss
+

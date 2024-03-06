@@ -35,16 +35,16 @@ def Split_Dataset(dataset,task):
         testval_list = list(label.iloc[testval_indices,0])
         testval_label = np.array(label.iloc[testval_indices,1],dtype=int)
 
-        with open('/home/r20user8/Documents/HDPMIL/datasets/'+dataset+'/'+task+'_'+dataset+"_train.txt", "w") as f:
+        with open('/home/yhchen/Documents/HDPMIL/datasets/'+dataset+'/'+task+'_'+dataset+"_train.txt", "w") as f:
             f.write('\n'.join(train_list))
 
-        with open('/home/r20user8/Documents/HDPMIL/datasets/'+dataset+'/'+task+'_'+dataset+"_testval.txt", "w") as f:
+        with open('/home/yhchen/Documents/HDPMIL/datasets/'+dataset+'/'+task+'_'+dataset+"_testval.txt", "w") as f:
             f.write('\n'.join(testval_list))
 
-        np.save('/home/r20user8/Documents/HDPMIL/datasets/'+dataset+'/'+task+'_'+dataset+'_train_label.npy',train_label)
-        np.save('/home/r20user8/Documents/HDPMIL/datasets/'+dataset+'/'+task+'_'+dataset+'_testval_label.npy', testval_label)
+        np.save('/home/yhchen/Documents/HDPMIL/datasets/'+dataset+'/'+task+'_'+dataset+'_train_label.npy',train_label)
+        np.save('/home/yhchen/Documents/HDPMIL/datasets/'+dataset+'/'+task+'_'+dataset+'_testval_label.npy', testval_label)
 
-    elif task=='subtyping' and dataset=='ESCA':
+    elif task=='subtyping' and dataset in ['ESCA','BRCA']:
 
         label = pd.read_csv(f'/data1/WSI/Patches/Cropped_Patches/{dataset}/BioData/{dataset}_Subtype_Label.csv')
         label = label.dropna()
@@ -58,18 +58,18 @@ def Split_Dataset(dataset,task):
         testval_list = list(label.iloc[testval_indices, 0])
         testval_label = np.array(label.iloc[testval_indices, 1], dtype=int)
 
-        with open('/home/r20user8/Documents/HDPMIL/datasets/' + dataset + '/' + task + '_' + dataset + "_train.txt",
+        with open('/home/yhchen/Documents/HDPMIL/datasets/' + dataset + '/' + task + '_' + dataset + "_train.txt",
                   "w") as f:
             f.write('\n'.join(train_list))
 
-        with open('/home/r20user8/Documents/HDPMIL/datasets/' + dataset + '/' + task + '_' + dataset + "_testval.txt",
+        with open('/home/yhchen/Documents/HDPMIL/datasets/' + dataset + '/' + task + '_' + dataset + "_testval.txt",
                   "w") as f:
             f.write('\n'.join(testval_list))
 
-        np.save('/home/r20user8/Documents/HDPMIL/datasets/' + dataset + '/' + task + '_' + dataset + '_train_label.npy',
+        np.save('/home/yhchen/Documents/HDPMIL/datasets/' + dataset + '/' + task + '_' + dataset + '_train_label.npy',
                 train_label)
         np.save(
-            '/home/r20user8/Documents/HDPMIL/datasets/' + dataset + '/' + task + '_' + dataset + '_testval_label.npy',
+            '/home/yhchen/Documents/HDPMIL/datasets/' + dataset + '/' + task + '_' + dataset + '_testval_label.npy',
             testval_label)
 
 
@@ -93,25 +93,25 @@ def Split_Dataset(dataset,task):
         # test_normal_list, val_normal_list = get_training_and_testing_sets(testval_normal_list, 0.5)
         train_list = train_cancer_list + train_normal_list
         testval_list = testval_cancer_list + testval_normal_list
-        with open('/home/r20user8/Documents/HDPMIL/datasets/' + dataset + '/' + task + '_' + dataset + "_train.txt",
+        with open('/home/yhchen/Documents/HDPMIL/datasets/' + dataset + '/' + task + '_' + dataset + "_train.txt",
                   "w") as f:
             f.write('\n'.join(train_list))
-        with open('/home/r20user8/Documents/HDPMIL/datasets/' + dataset + '/' + task + '_' + dataset + "_testval.txt",
+        with open('/home/yhchen/Documents/HDPMIL/datasets/' + dataset + '/' + task + '_' + dataset + "_testval.txt",
                   "w") as f:
             f.write('\n'.join(testval_list))
         # val_list = val_list + val_normal_list
         train_label = np.array([1] * len(train_cancer_list) + [0] * len(train_normal_list))
         testval_label = np.array([1] * len(testval_cancer_list) + [0] * len(testval_normal_list))
 
-        np.save('/home/r20user8/Documents/HDPMIL/datasets/' + dataset + '/' + task + '_' + dataset + '_train_label.npy',
+        np.save('/home/yhchen/Documents/HDPMIL/datasets/' + dataset + '/' + task + '_' + dataset + '_train_label.npy',
                 train_label)
         np.save(
-            '/home/r20user8/Documents/HDPMIL/datasets/' + dataset + '/' + task + '_' + dataset + '_testval_label.npy',
+            '/home/yhchen/Documents/HDPMIL/datasets/' + dataset + '/' + task + '_' + dataset + '_testval_label.npy',
             testval_label)
 
     elif dataset == 'Camelyon':
         # all_list = glob.glob(f'/data1/WSI/Patches/Features/Camelyon16/Camelyon16_Tissue_Kimia_20x/*/*')
-        df = pd.read_csv('/home/r20user8/Documents/HDPMIL/datasets/Camelyon16/Camelyon16.csv')
+        df = pd.read_csv('/home/yhchen/Documents/HDPMIL/datasets/Camelyon16/Camelyon16.csv')
         cancer_list = list(df['0'][df.iloc[:,1]==1])
         normal_list = list(df['0'][df.iloc[:,1]==0])
         for i in range(len(cancer_list)):
@@ -143,11 +143,11 @@ def Split_Dataset(dataset,task):
         train_list = train_cancer_list + train_normal_list
         testval_list = testval_cancer_list + testval_normal_list
         with open(
-                '/home/r20user8/Documents/HDPMIL/datasets/' + dataset + '/' + task + '_' + dataset + "_train.txt",
+                '/home/yhchen/Documents/HDPMIL/datasets/' + dataset + '/' + task + '_' + dataset + "_train.txt",
                 "w") as f:
             f.write('\n'.join(train_list))
         with open(
-                '/home/r20user8/Documents/HDPMIL/datasets/' + dataset + '/' + task + '_' + dataset + "_testval.txt",
+                '/home/yhchen/Documents/HDPMIL/datasets/' + dataset + '/' + task + '_' + dataset + "_testval.txt",
                 "w") as f:
             f.write('\n'.join(testval_list))
         # val_list = val_list + val_normal_list
@@ -155,11 +155,40 @@ def Split_Dataset(dataset,task):
         testval_label = np.array([1] * len(testval_cancer_list) + [0] * len(testval_normal_list))
 
         np.save(
-            '/home/r20user8/Documents/HDPMIL/datasets/' + dataset + '/' + task + '_' + dataset + '_train_label.npy',
+            '/home/yhchen/Documents/HDPMIL/datasets/' + dataset + '/' + task + '_' + dataset + '_train_label.npy',
             train_label)
         np.save(
-            '/home/r20user8/Documents/HDPMIL/datasets/' + dataset + '/' + task + '_' + dataset + '_testval_label.npy',
+            '/home/yhchen/Documents/HDPMIL/datasets/' + dataset + '/' + task + '_' + dataset + '_testval_label.npy',
             testval_label)
+    elif args.task == 'NSCLC' and dataset== 'NSCLC':
+
+        LUAD_list = glob.glob('/home/yhchen/Documents/HDPMIL/datasets/LUAD/DP_EM_feats_concentration0.1/*')
+        LUSC_list = glob.glob('/home/yhchen/Documents/HDPMIL/datasets/LUSC/DP_EM_feats_concentration0.1/*')
+        randomize_files(LUAD_list)
+        randomize_files(LUSC_list)
+
+        train_LUAD_list, testval_LUAD_list = get_training_and_testing_sets(LUAD_list, 0.8)
+        # test_list, val_list = get_training_and_testing_sets(testval_list, 0.5)
+        train_LUSC_list, testval_LUSC_list = get_training_and_testing_sets(LUSC_list, 0.8)
+        # test_normal_list, val_normal_list = get_training_and_testing_sets(testval_normal_list, 0.5)
+        train_list = train_LUAD_list + train_LUSC_list
+        testval_list = testval_LUAD_list + testval_LUSC_list
+        with open('/home/yhchen/Documents/HDPMIL/datasets/' + dataset + '/' + task + '_' + dataset + "_train.txt",
+                  "w") as f:
+            f.write('\n'.join(train_list))
+        with open('/home/yhchen/Documents/HDPMIL/datasets/' + dataset + '/' + task + '_' + dataset + "_testval.txt",
+                  "w") as f:
+            f.write('\n'.join(testval_list))
+        # val_list = val_list + val_normal_list
+        train_label = np.array([1] * len(train_LUAD_list) + [0] * len(train_LUSC_list))
+        testval_label = np.array([1] * len(testval_LUAD_list) + [0] * len(testval_LUSC_list))
+
+        np.save('/home/yhchen/Documents/HDPMIL/datasets/' + dataset + '/' + task + '_' + dataset + '_train_label.npy',
+                train_label)
+        np.save(
+            '/home/yhchen/Documents/HDPMIL/datasets/' + dataset + '/' + task + '_' + dataset + '_testval_label.npy',
+            testval_label)
+
                 # else:
     #     cancer_list = glob.glob()
     #

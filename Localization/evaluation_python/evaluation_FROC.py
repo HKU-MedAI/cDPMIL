@@ -91,8 +91,9 @@ def readCSVContent(csvDIR):
         Xcorr.append(int(elems[1]))
         Ycorr.append(int(elems[2]))
     Logits = np.array(Logits)
-    Logits = (Logits-np.mean(Logits))/np.std(Logits)
-    Probs = [round(1/(1+np.exp(-float(Logits[i]))),2) for i in range(len(Logits))]
+    # Logits = (Logits-np.mean(Logits))/np.std(Logits)
+    # Probs = [round(1/(1+np.exp(-float(Logits[i]))),2) for i in range(len(Logits))]
+    Probs = [round(Logits[i],5) for i in range(len(Logits))]
     return Probs, Xcorr, Ycorr
     
          
@@ -217,11 +218,11 @@ def plotFROC(total_FPs, total_sensitivity):
     
 if __name__ == "__main__":
 
-    mask_folder = glob.glob("/data1/WSI/Camelyon16/lesion_annotation/*.tif")
+    mask_folder = glob.glob("/data1/public/WSI/Camelyon16/lesion_annotation/*.tif")
     result_folder = "/data1/WSI/Patches/Features/Camelyon16/simclr_files_256_v2/testing"
     result_file_list = []
     result_file_list += [each for each in os.listdir(result_folder) if each.endswith('.csv')]
-    with open('/home/r20user8/Documents/HDPMIL/datasets/Camelyon16/remix_processed/test_list.txt') as f:
+    with open('/home/yhchen/Documents/HDPMIL/datasets/Camelyon16/remix_processed/test_list.txt') as f:
         label_list = f.readlines()
     labels = {}
     for item in label_list:
@@ -239,7 +240,7 @@ if __name__ == "__main__":
         slide_name = case.split('/')[-1].split('.')[0]
         print ('Evaluating Performance on image:', slide_name)
         sys.stdout.flush()
-        csvDIR = os.path.join(result_folder, slide_name, 'coor_logit_DP.csv')
+        csvDIR = os.path.join(result_folder, slide_name, 'DP_insclassifier_prob.csv')
         Probs, Xcorr, Ycorr  = readCSVContent(csvDIR)
                 
         # is_tumor = case[0:5] == 'Tumor'
@@ -252,9 +253,9 @@ if __name__ == "__main__":
             # # evaluation_mask = np.array(evaluation_mask)
             # ITC_labels = computeITCList(evaluation_mask, L0_RESOLUTION, EVALUATION_MASK_LEVEL)
 
-            maskDIR = os.path.join(f"/data1/WSI/Camelyon16/lesion_annotation/{slide_name}.tif")
+            maskDIR = os.path.join(f"/data1/public/WSI/Camelyon16/lesion_annotation/{slide_name}.tif")
             evaluation_mask = computeEvaluationMask(maskDIR, L0_RESOLUTION, EVALUATION_MASK_LEVEL)
-            np.save(f"/data1/WSI/Camelyon16/lesion_annotation/{slide_name}_eval_mask.npy",evaluation_mask)
+            # np.save(f"/data1/WSI/Camelyon16/lesion_annotation/{slide_name}_eval_mask.npy",evaluation_mask)
             ITC_labels = computeITCList(evaluation_mask, L0_RESOLUTION, EVALUATION_MASK_LEVEL)
         else:
             evaluation_mask = 0
