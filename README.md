@@ -26,11 +26,12 @@ We use two dataset projects in our paper for demonstration: 1) [Camelyon16](http
 You may follow the instructions in the websites to download the data.
 
 # Crop Slide and Feature Extraction
-
-Please refer to our previous project [WSI-HGNN](https://github.com/HKU-MedAI/WSI-HGNN).
+We crop slides with magnification parameter set to 20 (level 0) and features are extracted using pretrained KimiaNet.
+For implementation details, please refer to our previous project [WSI-HGNN](https://github.com/HKU-MedAI/WSI-HGNN).
 
 # Model Training
-
+In order to train a cDP-MIL model, you need to firstly aggregate the extracted features and then use the aggrgated features for prediction. 
+So basically, the training module contains two step: aggregation and prediction.
 ## DP Aggregation
 
 ```shell
