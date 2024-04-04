@@ -1,4 +1,4 @@
-# [ECCV2024] cDP-MIL: Robust Multiple Instance Learning via Cascaded Dirichlet Process
+# [ECCV2024 Under Review] cDP-MIL: Robust Multiple Instance Learning via Cascaded Dirichlet Process
 
 [//]: # (This repository holds the Pytorch implementation for the ReMix augmentation described in the paper )
 
