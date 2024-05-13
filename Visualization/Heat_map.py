@@ -33,16 +33,17 @@ def get_magnified_image(wsi_name,level):
     img = wsi.get_thumbnail(dim)
     return img, wsi
 
-def color_map_color(value, cmap_name='Wistia', vmin=0, vmax=1):
+#'Wistia''coolwarm'
+def color_map_color(value, cmap_name='coolwarm', vmin=0, vmax=1):
     # norm = plt.Normalize(vmin, vmax)
     norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
     cmap = cm.get_cmap(cmap_name)  # PiYG
-    color = cmap(norm(value))[:, :3]  # will return rgba, we take only first 3 so we get rgb
+    color = cmap(1-norm(value))[:, :3]  # will return rgba, we take only first 3 so we get rgb
     return color
 
-def visualize(node_feat_mask, wsi_name, patches_coords, poly_coords, img, level, epoch):
-    output_name = os.path.join('./Graphs_DP', wsi_name + ".png")
-    imsave(output_name, np.asarray(img))
+def visualize(node_feat_mask, wsi_name, patches_coords, poly_coords, img, level):
+    # output_name = os.path.join('./Graphs_DP', wsi_name + ".png")
+    # imsave(output_name, np.asarray(img))
     img = np.int32(img)
 
     colours = color_map_color(node_feat_mask)
@@ -56,8 +57,8 @@ def visualize(node_feat_mask, wsi_name, patches_coords, poly_coords, img, level,
         mag_fac = 2 ** (level)
         coords = coords.reshape((-1, 1, 2)) / mag_fac
         img = cv2.polylines(img, np.int32([coords]), False, (255, 0, 0), thickness=4)
-    os.makedirs(f'./Explain_Graphs_DP2_{epoch}',exist_ok=True)
-    output_name = os.path.join( f'./Explain_Graphs_DP2_{epoch}', wsi_name + ".jpeg")
+    os.makedirs(f'./Explain_Graphs_DP2_new',exist_ok=True)
+    output_name = os.path.join( f'./Explain_Graphs_DP2_new', wsi_name + ".jpeg")
     imsave(output_name, np.uint8(img))
 
 def visualize1(node_feat_mask, wsi_name, patches_coords, poly_coords, img, level):
@@ -127,17 +128,17 @@ def get_ground_truths(xml_path, patches_coords, level):
 
 level = 5
 annotated_slides = glob.glob('/data1/public/WSI/Camelyon16/lesion_annotation/*.xml')
-for epoch in [1,10,20,30,40,50,60,70,77]:
-    for slide in annotated_slides:
-        wsi_name = slide.split('/')[-1][:8]
-        img, wsi = get_magnified_image(wsi_name,level)
-        coor_feat_mask = pd.read_csv(f'/data1/WSI/Patches/Features/Camelyon16/simclr_files_256_v2/testing/{wsi_name}/DP_insclassifier_prob_{epoch}.csv')
-        X = np.array(list(coor_feat_mask['X']),dtype=int)
-        Y = np.array(list(coor_feat_mask['Y']),dtype=int)
-        # node_feat_mask = [-np.log(1/(x)-1) for x in list(coor_feat_mask['prob'])]
-        # node_feat_mask = np.array(node_feat_mask,dtype=float)
-        node_feat_mask = 1-np.array(list(coor_feat_mask['prob']),dtype=float)
-        node_feat_mask = (node_feat_mask-np.min(node_feat_mask))/(np.max(node_feat_mask)-np.min(node_feat_mask))
-        patches_coords = [(int(X[i]/2**level),int(Y[i]/2**level)) for i in range(len(X))]
-        labels, poly_coords = get_ground_truths(slide, patches_coords, level)
-        visualize(node_feat_mask,wsi_name,patches_coords,poly_coords,img,level,epoch)
+# for epoch in [1,10,20,30,40,50,60,70,77]:
+for slide in annotated_slides:
+    wsi_name = slide.split('/')[-1][:8]
+    img, wsi = get_magnified_image(wsi_name,level)
+    coor_feat_mask = pd.read_csv(f'/data1/WSI/Patches/Features/Camelyon16/simclr_files_256_v2/testing/{wsi_name}/DP_insclassifier_prob.csv')
+    X = np.array(list(coor_feat_mask['X']),dtype=int)
+    Y = np.array(list(coor_feat_mask['Y']),dtype=int)
+    # node_feat_mask = [-np.log(1/(x)-1) for x in list(coor_feat_mask['prob'])]
+    # node_feat_mask = np.array(node_feat_mask,dtype=float)
+    node_feat_mask = 1-np.array(list(coor_feat_mask['prob']),dtype=float)
+    node_feat_mask = (node_feat_mask-np.min(node_feat_mask))/(np.max(node_feat_mask)-np.min(node_feat_mask))
+    patches_coords = [(int(X[i]/2**level),int(Y[i]/2**level)) for i in range(len(X))]
+    labels, poly_coords = get_ground_truths(slide, patches_coords, level)
+    visualize(node_feat_mask,wsi_name,patches_coords,poly_coords,img,level)

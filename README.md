@@ -27,7 +27,8 @@ You may follow the instructions in the websites to download the data.
 
 # Crop Slide and Feature Extraction
 We crop slides with magnification parameter set to 20 (level 0) and features are extracted using pretrained KimiaNet.
-For implementation details, please refer to our previous project [WSI-HGNN](https://github.com/HKU-MedAI/WSI-HGNN).
+
+[//]: # (For implementation details, please refer to our previous project [WSI-HGNN]&#40;https://github.com/HKU-MedAI/WSI-HGNN&#41;.)
 
 # Model Training
 In order to train a cDP-MIL model, you need to firstly aggregate the extracted features and then use the aggrgated features for prediction. 

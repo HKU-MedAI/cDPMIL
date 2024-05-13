@@ -74,16 +74,25 @@ def Split_Dataset(dataset,task):
 
 
     elif task == 'binary' and dataset in ['BRCA','COAD','ESCA']:
-        all_list = glob.glob(f'/data1/WSI/Patches/Features/{dataset}/{dataset}_Tissue_Kimia_20x/*')
+        # all_list = glob.glob(f'/data1/WSI/Patches/Features/{dataset}/{dataset}_Tissue_Kimia_20x/*')
+        all_list = glob.glob(f'/data1/WSI/Patches/Features/{dataset}/{dataset}_Tissue_BMIL/pt_files/*')
         cancer_list = []
         normal_list = []
+        label_list = []
+        patient_list = []
         for item in all_list:
-            if item[-10:-8] == '01':
+            if item.split('/')[-1].split('.')[0][13:15] == '01':
+                patient_list.append(item.split('/')[-1].split('.')[0])
                 cancer_list.append(item)
-            elif item[-10:-8] == '11':
+                label_list.append(1)
+            elif item.split('/')[-1].split('.')[0][13:15] == '11':
+                patient_list.append(item.split('/')[-1].split('.')[0])
                 normal_list.append(item)
+                label_list.append(0)
             else:
                 continue
+        df = pd.DataFrame({'patient':patient_list,'label':label_list})
+        df.to_csv('/home/yhchen/Documents/MHIM-WSI/dataset_csv/'+dataset+'_'+task+'_label.csv',index=False)
         randomize_files(normal_list)
         randomize_files(cancer_list)
 
