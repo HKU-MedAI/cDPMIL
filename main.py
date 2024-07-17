@@ -12,6 +12,7 @@ from collections import Counter
 import random
 from sklearn.metrics import (accuracy_score, precision_score, recall_score,
                              roc_auc_score, roc_curve)
+import time
 import math
 import wandb
 from pyhealth.metrics import binary_metrics_fn, multiclass_metrics_fn
@@ -279,7 +280,8 @@ def test_multiclass(test_list, test_labels, model, criterion, eta_cluster, feat_
                 centroids = np.load('/home/yhchen/Documents/HDPMIL/datasets/'+dataset+'/DP_EM_feats/'+feat_pth)
                 centroids = torch.from_numpy(centroids).to(device)
             else:
-                feat_pth = feat_pth[-23:]+'.npy'
+                feat_pth = feat_pth.split('/')[-1].split('\n')[0]+'.npy'
+                # feat_pth = feat_pth[-23:]+'.npy'
                 centroids = np.load(f'/home/yhchen/Documents/HDPMIL/datasets/{dataset}/DP_EM_feats_concentration{concentration}/'+feat_pth)
                 centroids = torch.from_numpy(centroids).to(device)
 
@@ -506,14 +508,16 @@ if __name__ == '__main__':
         train_list = [x.split(',')[0] for x in train_list]  # file names
         # train_labels_pth = f'datasets/{args.dataset}16/remix_processed/train_bag_labels.npy'
         train_labels_pth = f'datasets/{args.dataset}/{args.task}_{args.dataset}_train_label.npy'
-        train_label = np.load(train_labels_pth)-int(args.task=='staging')
+        # train_label = np.load(train_labels_pth)-int(args.task=='staging')
+        train_label = np.load(train_labels_pth)
         # test_list = f'datasets/{args.dataset}16/remix_processed/test_list.txt'
         test_list = f'datasets/{args.dataset}/{args.task}_{args.dataset}_testval.txt'
         test_list = open(test_list, 'r').readlines()
         test_list = [x.split(',')[0] for x in test_list]
         # test_labels_pth = f'datasets/{args.dataset}16/remix_processed/test_bag_labels.npy'
         test_labels_pth = f'datasets/{args.dataset}/{args.task}_{args.dataset}_testval_label.npy'
-        test_label = np.load(test_labels_pth)-int(args.task=='staging')
+        # test_label = np.load(test_labels_pth)-int(args.task=='staging')
+        test_label = np.load(test_labels_pth)
 
     # elif args.task == 'staging':
     #     train_list = f'datasets/{args.dataset}/{args.task}_{args.dataset}_train.txt'
@@ -552,17 +556,18 @@ if __name__ == '__main__':
     #                 config["rep"] = rep
     #                 config["n_comp"] = n_comp
     #                 config["concentration"] = concentration
-                    wandb.init(name=args.dataset+'_HDPMIL_DP(skl)+MLP_'+args.task,
-                               project='HDPMIL',
-                               entity='yihangc',
-                               notes='',
-                               mode='online', # disabled/online/offline
-                               config=config,
-                               tags=[])
+
+                    # wandb.init(name=args.dataset+'_HDPMIL_DP(skl)+MLP_'+args.task,
+                    #            project='UAMIL',
+                    #            entity='yihangc',
+                    #            notes='',
+                    #            mode='online', # disabled/online/offline
+                    #            config=config,
+                    #            tags=[])
                     # model = BClassifier(input_size=args.feat_dim,num_classes=args.num_classes).to(device)
-                    # model = DP_Classifier(trunc=args.num_classes,eta=eta_classifier,batch_size=1,dim=args.feat_dim,n_sample=1).to(device)
+                    model = DP_Classifier(trunc=args.num_classes,eta=eta_classifier,batch_size=1,dim=args.feat_dim,n_sample=1).to(device)
                     # model = FCLayer(in_size=args.feat_dim,out_size=2).to(device)
-                    model = MLP(in_size=args.feat_dim,out_size=2).to(device)
+                    # model = MLP(in_size=args.feat_dim,out_size=2).to(device)
                     # model = KNeighborsClassifier(n_neighbors=5)
                     # weights = torch.load('DP_Classifier_COAD2BRCA.pth')
                     # model.load_state_dict(weights, strict=True)
@@ -577,17 +582,27 @@ if __name__ == '__main__':
                     # scheduler = None
                     best_acc = 0
                     for epoch in range(args.num_epochs):
+                        start_train = time.time()
                         shuffled_train_idxs = np.random.permutation(len(train_label))
                         train_list, train_label = [train_list[index] for index in shuffled_train_idxs], train_label[shuffled_train_idxs]
                         train_loss_bag = train(train_list, train_label, model, criterion, optimizer, concentration, args.feat_dim, args.dataset, n_comp, mode)
+                        train_end = time.time()
                         # train_revised(train_list, train_label, model, criterion, optimizer, concentration,
                         #               args.feat_dim, args.dataset, n_comp, mode)
+                        train_duration = train_end - start_train
+                        print(
+                            f'Time elapsed: {train_duration // 3600} hours {(train_duration % 3600) // 60} mins {train_duration % 60}  seconds.')
+                        start_test = time.time()
                         if args.task == 'binary' or args.task == 'subtyping' or args.task == 'NSCLC':
                             precision, recall, accuracy, f1, avg, auc = test_binary(test_list, test_label, model, criterion, concentration, args.feat_dim, args.dataset, n_comp, mode)
                             # precision, recall, accuracy, f1, avg, auc = test_binary_revised(test_list, test_label, model,
                             #                                                         criterion, concentration,
                             #                                                         args.feat_dim, args.dataset)
                             print(f"precision:{precision}, recall:{recall}, acc:{accuracy}, f1:{f1}, auc:{auc}.")
+                            test_end = time.time()
+                            test_duration = test_end - start_test
+                            print(
+                                f'Time elapsed: {test_duration // 3600} hours {(test_duration % 3600) // 60} mins {test_duration % 60}  seconds.')
                             wandb.log({'train_loss': train_loss_bag, 'precision': precision, 'recall': recall, 'accuracy': accuracy, 'f1':f1,
                                        'avg': avg, 'auc': auc})
                             # if accuracy >= best_acc:
@@ -598,6 +613,7 @@ if __name__ == '__main__':
                             accuracy, f1, auc = test_multiclass(test_list, test_label, model, criterion, concentration, args.feat_dim, args.dataset)
                             wandb.log({'accuracy': accuracy, 'f1': f1, 'auc': auc})
                         # print('Epoch [%d/%d] train loss: %.4f' % (epoch, args.num_epochs, train_loss_bag))
+
                         scheduler.step()
 
                                 # train(train_list, train_label, model, criterion, optimizer)

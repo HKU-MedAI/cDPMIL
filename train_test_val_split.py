@@ -20,7 +20,7 @@ def get_training_and_testing_sets(file_list, split):
 
 def Split_Dataset(dataset,task):
     if task == 'staging':
-        label = pd.read_csv('/data1/WSI/Patches/Cropped Patches/'+dataset+'/BioData/'+dataset+'_Stage_Label.csv')
+        label = pd.read_csv('/data1/WSI/Patches/Cropped_Patches/'+dataset+'/BioData/'+dataset+'_Stage_Label.csv')
         # ignore slides w/o stage labels
         label = label.dropna()
         graph_indices = np.arange(len(label))
@@ -73,9 +73,9 @@ def Split_Dataset(dataset,task):
             testval_label)
 
 
-    elif task == 'binary' and dataset in ['BRCA','COAD','ESCA']:
+    elif task == 'binary' and dataset in ['BRCA','COAD','ESCA','PRAD']:
         # all_list = glob.glob(f'/data1/WSI/Patches/Features/{dataset}/{dataset}_Tissue_Kimia_20x/*')
-        all_list = glob.glob(f'/data1/WSI/Patches/Features/{dataset}/{dataset}_Tissue_BMIL/pt_files/*')
+        all_list = glob.glob(f'/data1/WSI/Patches/Features/{dataset}/{dataset}_Kimia_20x/*')
         cancer_list = []
         normal_list = []
         label_list = []
@@ -91,8 +91,8 @@ def Split_Dataset(dataset,task):
                 label_list.append(0)
             else:
                 continue
-        df = pd.DataFrame({'patient':patient_list,'label':label_list})
-        df.to_csv('/home/yhchen/Documents/MHIM-WSI/dataset_csv/'+dataset+'_'+task+'_label.csv',index=False)
+        # df = pd.DataFrame({'patient':patient_list,'label':label_list})
+        # df.to_csv('/home/yhchen/Documents/MHIM-WSI/dataset_csv/'+dataset+'_'+task+'_label.csv',index=False)
         randomize_files(normal_list)
         randomize_files(cancer_list)
 
@@ -226,7 +226,7 @@ def Split_Dataset(dataset,task):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='base dictionary construction')
-    parser.add_argument('--dataset', type=str, default='ESCA')
+    parser.add_argument('--dataset', type=str, default='PRAD')
     parser.add_argument('--task',default='binary')
 
     args = parser.parse_args()

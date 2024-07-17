@@ -127,7 +127,7 @@ def get_ground_truths(xml_path, patches_coords, level):
     return gt_labels, polygon_coords
 
 level = 5
-annotated_slides = glob.glob('/data1/public/WSI/Camelyon16/lesion_annotation/*.xml')
+annotated_slides = glob.glob('../annotation_tif/*.xml')
 # for epoch in [1,10,20,30,40,50,60,70,77]:
 for slide in annotated_slides:
     wsi_name = slide.split('/')[-1][:8]
@@ -137,7 +137,7 @@ for slide in annotated_slides:
     Y = np.array(list(coor_feat_mask['Y']),dtype=int)
     # node_feat_mask = [-np.log(1/(x)-1) for x in list(coor_feat_mask['prob'])]
     # node_feat_mask = np.array(node_feat_mask,dtype=float)
-    node_feat_mask = 1-np.array(list(coor_feat_mask['prob']),dtype=float)
+    node_feat_mask = 1-np.array(list(coor_feat_mask['logit']),dtype=float)
     node_feat_mask = (node_feat_mask-np.min(node_feat_mask))/(np.max(node_feat_mask)-np.min(node_feat_mask))
     patches_coords = [(int(X[i]/2**level),int(Y[i]/2**level)) for i in range(len(X))]
     labels, poly_coords = get_ground_truths(slide, patches_coords, level)

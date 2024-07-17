@@ -21,7 +21,7 @@ from tools.utils import setup_logger
 
 import os
 import wandb
-from pyhealth.metrics import binary_metrics_fn
+from pyhealth.metrics import binary_metrics_fn,multiclass_metrics_fn
 os.environ['CUDA_VISIBLE_DEVICES']='3'
 
 warnings.simplefilter('ignore')
@@ -30,9 +30,27 @@ warnings.simplefilter('ignore')
 def get_bag_feats_v2(feats, bag_label, args):
     if isinstance(feats, str):
         # if feats is a path, load it
-        # feats = feats.split(',')[0].split('\n')[0]+'/features.pt'
-        feats = torch.Tensor(np.load(feats.split(',')[0])).cuda()
-        # feats = torch.load(feats).cuda()
+        if args.dataset == 'NSCLC':
+            if 'LUAD' in feats:
+                pre_path = '/data1/WSI/Patches/Features'
+                slide_name = feats.split('/')[-1].split('\n')[0]
+                slide_name = slide_name.split('.')[0]
+                feats = pre_path + '/LUAD/LUAD_Diagnostic_Kimia_20x/' + slide_name + '/features.pt'
+            else:
+                pre_path = '/data1/WSI/Patches/Features'
+                slide_name = feats.split('/')[-1].split('\n')[0]
+                slide_name = slide_name.split('.')[0]
+                feats = pre_path + '/LUSC/LUSC_Diagnostic_Kimia_20x/' + slide_name + '/features.pt'
+        elif args.dataset == 'Camelyon':
+            feats = feats.split('\n')[0]
+            feats = feats.replace('simclr_files_256_v0','Camelyon16_Tissue_Kimia_20x')
+            # feats = feats.replace('v0','v2')
+            feats = feats + '/features.pt'
+        else:
+            feats = feats.split(',')[0].split('\n')[0]+'/features.pt'
+            feats = os.path.join('/data1/WSI/Patches/Features/BRACS_WSI/BRACS_WSI_Kimia_20x', feats)
+            # feats = torch.Tensor(np.load(feats.split(',')[0])).cuda()
+        feats = torch.load(feats).cuda()
     feats = feats[np.random.permutation(len(feats))]
     if args.num_classes != 1:
         # mannual one-hot encoding, following dsmil
@@ -40,6 +58,7 @@ def get_bag_feats_v2(feats, bag_label, args):
         if int(bag_label) <= (len(label) - 1):
             label[int(bag_label)] = 1
         bag_label = Variable(torch.FloatTensor([label]).cuda())
+    bag_label = torch.FloatTensor([bag_label]).cuda()
         
     return bag_label, feats
 
@@ -221,22 +240,34 @@ def test(test_feats, test_gts, milnet, criterion, args):
             total_loss = total_loss + loss.item()
             sys.stdout.write('\r Testing bag [%d/%d] bag loss: %.4f' % (i, len(test_feats), loss.item()))
             test_labels.extend([bag_label.cpu().numpy()])
-            test_predictions.extend([(torch.sigmoid(bag_prediction)).squeeze().cpu().numpy()])
+            if args.num_classes == 1:
+                test_predictions.extend([(torch.sigmoid(bag_prediction)).squeeze().cpu().numpy()])
+            else:
+                test_predictions.extend([(torch.nn.Softmax(dim=1)(bag_prediction)).squeeze().cpu().numpy()])
         sys.stdout.write('\n')
     test_labels = np.array(test_labels)
+    test_labels = test_labels.squeeze()
     # test_labels = test_labels.reshape(len(test_labels), -1)
     test_predictions = np.array(test_predictions)
     # y_pred, y_true = inverse_convert_label(test_predictions), inverse_convert_label(test_labels)
-
-    res = binary_metrics_fn(test_labels, test_predictions,
-                            metrics=['accuracy', 'precision', 'recall', 'roc_auc','f1'])
-    acc = res['accuracy']
-    p = res['precision']
-    r = res['recall']
-    f1 = res['f1']
-    c_auc = res['roc_auc']
-    avg = np.mean([p, r, acc, f1])
-    return p, r, acc, f1, avg, c_auc
+    if args.num_classes == 1:
+        res = binary_metrics_fn(test_labels, test_predictions,
+                                metrics=['accuracy', 'precision', 'recall', 'roc_auc','f1'])
+        acc = res['accuracy']
+        p = res['precision']
+        r = res['recall']
+        f1 = res['f1']
+        c_auc = res['roc_auc']
+        avg = np.mean([p, r, acc, f1])
+        return p, r, acc, f1, avg, c_auc
+    else:
+        res = multiclass_metrics_fn(np.where(test_labels==1)[1], test_predictions,
+                                    metrics=["roc_auc_weighted_ovo", "f1_weighted", "accuracy"])
+        acc = res['accuracy']
+        f = res['f1_weighted']
+        # r = res['recall']
+        c_auc = res['roc_auc_weighted_ovo']
+        return acc,f,c_auc
 
 
 def multi_label_roc(labels, predictions, num_classes):
@@ -267,11 +298,11 @@ def main():
     parser = argparse.ArgumentParser(description='Train MIL Models with ReMix')
     parser.add_argument('--feats_size', default=512, type=int, help='Dimension of the feature size [512]')
     parser.add_argument('--lr', default=0.0002, type=float, help='Initial learning rate [0.0002]')
-    parser.add_argument('--num_epochs', default=100, type=int, help='Number of total training epochs')
+    parser.add_argument('--num_epochs', default=50, type=int, help='Number of total training epochs')
     parser.add_argument('--gpu_index', type=int, nargs='+', default=(0, ), help='GPU ID(s) [0]')
     parser.add_argument('--weight_decay', default=5e-3, type=float, help='Weight decay [5e-3]')
-    parser.add_argument('--dataset', default='Camelyon', type=str,
-                        choices=['Camelyon', 'Unitopatho', 'COAD'], help='Dataset folder name')
+    parser.add_argument('--dataset', default='BRACS_WSI', type=str,
+                        choices=['Camelyon', 'Unitopatho', 'COAD', 'BRACS_WSI','NSCLC'], help='Dataset folder name')
     parser.add_argument('--model', default='dsmil', type=str,
                         choices=['dsmil', 'abmil'], help='MIL model')
     # ReMix Parameters
@@ -284,19 +315,23 @@ def main():
     # Utils
     parser.add_argument('--exp_name', required=True, help='exp_name')
     parser.add_argument('--data_root', required=False, default='datasets', type=str, help='path to data root')
-    parser.add_argument('--num_repeats', default=1, type=int, help='Number of repeats')
+    parser.add_argument('--num_rep', default=1, type=int, help='Number of repeats')
+    parser.add_argument('--task', default='binary', type=str, help='Task name [binary or staging]')
     args = parser.parse_args()
     
-    assert args.dataset in ['Camelyon', 'Unitopatho', 'COAD'], 'Dataset not supported'
+    assert args.dataset in ['Camelyon', 'Unitopatho', 'COAD', 'BRACS_WSI', 'NSCLC'], 'Dataset not supported'
     # For Camelyon, we follow DSMIL to use binary labels: 1 for positive bags and 0 for negative bags.
     # For Unitopatho, we use one-hot encoding.
-    args.num_classes = {'Camelyon': 1, 'Unitopatho': 6, 'COAD':1}[args.dataset]
-    train_labels_pth = f'{args.data_root}/{args.dataset}16/remix_processed/train_bag_labels.npy'
-    test_labels_pth = f'{args.data_root}/{args.dataset}16/remix_processed/test_bag_labels.npy'
+    args.num_classes = {'Camelyon': 1, 'Unitopatho': 6, 'COAD':1, 'BRACS_WSI':3, 'NSCLC':1}[args.dataset]
+    # train_labels_pth = f'{args.data_root}/{args.dataset}/remix_processed/train_bag_labels.npy'
+    # test_labels_pth = f'{args.data_root}/{args.dataset}/remix_processed/test_bag_labels.npy'
+    train_labels_pth = f'{args.data_root}/{args.dataset}/{args.task}_{args.dataset}_train_label.npy'
+    test_labels_pth = f'{args.data_root}/{args.dataset}/{args.task}_{args.dataset}_testval_label.npy'
     # train_labels_pth = f'/home/r20user8/Documents/HDPMIL/datasets/Camelyon/binary_Camelyon_train_label.npy'
     # test_labels_pth = f'/home/r20user8/Documents/HDPMIL/datasets/Camelyon/binary_Camelyon_testval_label.npy'
     # loading the list of test data
-    test_feats = open(f'{args.data_root}/{args.dataset}16/remix_processed/test_list.txt', 'r').readlines()
+    # test_feats = open(f'{args.data_root}/{args.dataset}16/remix_processed/test_list.txt', 'r').readlines()
+    test_feats = open(f'{args.data_root}/{args.dataset}/{args.task}_{args.dataset}_testval.txt', 'r').readlines()
 
     # train_labels_pth = f'{args.data_root}/COAD/binary_COAD_train_label.npy'
     # test_labels_pth = f'{args.data_root}/COAD/binary_COAD_testval_label.npy'
@@ -304,19 +339,47 @@ def main():
     # test_feats = np.array(test_feats)
     #
     # test_feats = open(f'/home/r20user8/Documents/HDPMIL/datasets/Camelyon/binary_Camelyon_testval.txt', 'r').readlines()
-    # test_feats = np.array(test_feats)
+    test_feats = np.array(test_feats)
+    # test_feats = test_feats[:5]
 
     # use first_time to avoid duplicated logs
     first_time = True
     # test_generalizability(args)
     config = {"lr": args.lr, "rep": 0}
-    for t in range(args.num_repeats):
+    if args.dataset == 'Camelyon' and args.task == 'binary':
+        train_list = f'datasets/{args.dataset}/{args.task}_{args.dataset}_train.txt'
+        train_list = open(train_list, 'r').readlines()
+        train_feats = [x.split(',')[0] for x in train_list]  # file names
+        train_feats = np.array(train_feats)
+        train_labels_pth = f'datasets/{args.dataset}/{args.task}_{args.dataset}_train_label.npy'
+        train_labels = np.load(train_labels_pth)
+        test_list = f'datasets/{args.dataset}/{args.task}_{args.dataset}_testval.txt'
+        test_list = open(test_list,'r').readlines()
+        test_feats = [x.split(',')[0] for x in test_list]
+        test_feats = np.array(test_feats)
+        test_labels_pth = f'datasets/{args.dataset}/{args.task}_{args.dataset}_testval_label.npy'
+        test_labels = np.load(test_labels_pth)
+
+    elif args.task in ['subtyping','staging','binary','NSCLC']:
+        train_list = f'datasets/{args.dataset}/{args.task}_{args.dataset}_train.txt'
+        train_list = open(train_list, 'r').readlines()
+        train_feats = [x.split(',')[0] for x in train_list]  # file names
+        train_feats = np.array(train_feats)
+        train_labels_pth = f'datasets/{args.dataset}/{args.task}_{args.dataset}_train_label.npy'
+        train_labels = np.load(train_labels_pth)
+        test_list = f'datasets/{args.dataset}/{args.task}_{args.dataset}_testval.txt'
+        test_list = open(test_list, 'r').readlines()
+        test_feats = [x.split(',')[0] for x in test_list]
+        test_feats = np.array(test_feats)
+        test_labels_pth = f'datasets/{args.dataset}/{args.task}_{args.dataset}_testval_label.npy'
+        test_labels = np.load(test_labels_pth)
+
+    for t in range(args.num_rep):
         # ckpt_pth = setup_logger(args, first_time)
-        ckpt_pth = '/home/yhchen/Documents/HDPMIL/TMP.pth'
+        ckpt_pth = f'/home/yhchen/Documents/HDPMIL/datasets/{args.dataset}/{args.model}_{args.task}_ckpt.pth'
         logging.info(f'current args: {args}')
         logging.info(f'augmentation mode: {args.mode}')
 
-        # milnet = DP_Cluster(concentration=0.1,trunc=2,eta=1,batch_size=1,epoch=20, dim=512).cuda()
 
         # prepare model
         if args.model == 'abmil':
@@ -325,51 +388,25 @@ def main():
             i_classifier = dsmil.FCLayer(in_size=args.feats_size, out_size=args.num_classes).cuda()
             b_classifier = dsmil.BClassifier(input_size=args.feats_size, output_class=args.num_classes, dropout_v=0).cuda()
             milnet = dsmil.MILNet(i_classifier, b_classifier).cuda()
-            # state_dict_weights = torch.load('init.pth')
-            # milnet.load_state_dict(state_dict_weights, strict=False)
-            # logging.info('loading from init.pth')
-
-        criterion = nn.BCEWithLogitsLoss()
+        if args.num_classes==1:
+            criterion = nn.BCEWithLogitsLoss()
+        else:
+            criterion = nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(milnet.parameters(), lr=args.lr, betas=(0.5, 0.9), weight_decay=args.weight_decay)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.num_epochs, 0.000005)
 
-        if args.num_prototypes is not None:
-            # load reduced-bag
-            train_feats_pth = f'{args.data_root}/{args.dataset}/remix_processed/train_bag_feats_proto_{args.num_prototypes}_v2.npy'
-            logging.info(f'loading train_feats from {train_feats_pth}')
-            # loading features
-            train_feats = np.load(train_feats_pth, allow_pickle=True)
-            train_feats = torch.Tensor(train_feats).cuda()
 
-            if args.mode == 'cov' or args.mode == 'joint':
-                # loading semantic shift vectors
-                train_shift_bank_pth = f'{args.data_root}/{args.dataset}/remix_processed/train_bag_feats_shift_{args.num_prototypes}.npy'
-                semantic_shifts = np.load(f'{train_shift_bank_pth}')
-            else:
-                semantic_shifts = None
-            # semantic_shifts = None
-        else:
-            # when train_feats is None, loading them directly from the dataset npy folder.
-            train_feats = open(f'{args.data_root}/{args.dataset}16/remix_processed/train_list.txt', 'r').readlines()
-            # train_feats = open(f'{args.data_root}/COAD/binary_COAD_train.txt','r').readlines()
-            train_feats = np.array(train_feats)
+        semantic_shifts = None
 
-            # train_feats = open(f'/home/r20user8/Documents/HDPMIL/datasets/Camelyon/binary_Camelyon_train.txt', 'r').readlines()
-            # train_feats = np.array(train_feats)
-            semantic_shifts = None
-            
-        # loading labels
-        train_labels, test_labels = np.load(train_labels_pth), np.load(test_labels_pth)
-        train_labels, test_labels = torch.Tensor(train_labels).cuda(), torch.Tensor(test_labels).cuda()
 
         config["rep"]=t
-        # wandb.init(name='Camelyon_DSMIL_V2_256',
-        #            project='HDPMIL',
-        #            entity='yihangc',
-        #            notes='',
-        #            mode='online',  # disabled/online/offline
-        #            config=config,
-        #            tags=[])
+        wandb.init(name=f'{args.dataset}_{args.model}_{args.task}_origin_Kimia',
+                   project='UAMIL',
+                   entity='yihangc',
+                   notes='',
+                   mode='online',  # disabled/online/offline
+                   config=config,
+                   tags=[])
         best_acc = 0
         for epoch in range(1, args.num_epochs + 1):
             # shuffle data
@@ -377,23 +414,28 @@ def main():
             shuffled_train_idxs = np.random.permutation(len(train_labels))
             train_feats, train_labels = train_feats[shuffled_train_idxs], train_labels[shuffled_train_idxs]
             train_loss_bag = train(train_feats, train_labels, milnet, criterion, optimizer, args, semantic_shifts)
-            precision, recall, accuracy, f1, avg, auc = test(test_feats, test_labels, milnet, criterion, args)
-            print(f'pre:{precision},recall:{recall},acc:{accuracy},f1:{f1},auc:{auc}.')
-            # wandb.log({'train_loss': train_loss_bag, 'precision': precision, 'recall': recall, 'accuracy': accuracy, 'f1':f1,
-            #            'avg': avg, 'auc': auc})
+            if args.num_classes == 1:
+                precision, recall, accuracy, f1, avg, auc = test(test_feats, test_labels, milnet, criterion, args)
+                print(f'pre:{precision},recall:{recall},acc:{accuracy},f1:{f1},auc:{auc}.')
+                wandb.log({'train_loss': train_loss_bag, 'precision': precision, 'recall': recall, 'accuracy': accuracy, 'f1':f1,
+                           'avg': avg, 'auc': auc})
+            else:
+                accuracy, f1, auc = test(test_feats, test_labels, milnet, criterion, args)
+                print(f'acc:{accuracy},f1:{f1},auc:{auc}.')
+                wandb.log({'train_loss': train_loss_bag, 'accuracy': accuracy, 'f1': f1, 'auc': auc})
             logging.info('Epoch [%d/%d] train loss: %.4f' % (epoch, args.num_epochs, train_loss_bag))
             scheduler.step()
             if accuracy >= best_acc:
                 print('saving model...')
                 best_acc = accuracy
                 torch.save(milnet.state_dict(), ckpt_pth)
-        # wandb.finish()
+        wandb.finish()
 
-        precision, recall, accuracy, f1, avg, auc = test(test_feats, test_labels, milnet, criterion, args)
+        # precision, recall, accuracy, f1, avg, auc = test(test_feats, test_labels, milnet, criterion, args)
         torch.save(milnet.state_dict(), ckpt_pth)
         logging.info('Final model saved at: ' + ckpt_pth)
-        logging.info(f'Precision, Recall, Accuracy, Avg, AUC')
-        logging.info(f'{precision*100:.2f} {recall*100:.2f} {accuracy*100:.2f} {avg*100:.2f} {auc*100:.2f}')
+        # logging.info(f'Precision, Recall, Accuracy, Avg, AUC')
+        # logging.info(f'{precision*100:.2f} {recall*100:.2f} {accuracy*100:.2f} {avg*100:.2f} {auc*100:.2f}')
         first_time = False
 
 def test_generalizability(args):

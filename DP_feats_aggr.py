@@ -17,7 +17,6 @@ import pandas as pd
 import time
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-os.environ['CUDA_VISIBLE_DEVICES']='6'
 
 def get_HDP_feats(comp1,comp2,feats):
     dp_cluster1 = BayesianGaussianMixture(n_components=comp1,random_state=0,max_iter=30,weight_concentration_prior=0.1)
@@ -44,7 +43,8 @@ def get_feats(train_list, eta_cluster, feat_dim, dataset):
         else:
             bag_feats = torch.load(feat_pth+'/features.pt')
             bag_feats = bag_feats.cpu().numpy()
-            feat_pth = feat_pth[-23:]
+            # feat_pth = feat_pth[-23:]
+            feat_pth = feat_pth.split('/')[-1]
             # bag_feats = bag_feats.to(device)
         # dp_cluster = HDP_Cluster_EM(n_dps=10, trunc=10, eta=eta_cluster, batch_size=1, epoch=20, dim=feat_dim).to(
         #     device)
@@ -80,7 +80,7 @@ def get_feats(train_list, eta_cluster, feat_dim, dataset):
             # centroids = get_HDP_feats(30,10,bag_feats)
 
             # if i==0:
-                # os.mkdir(f'/home/yhchen/Documents/HDPMIL/datasets/{dataset}/DP_EM_feats_concentration{concentration}', exist_ok=True)
+                # os.mkdir(f'/home/yhchen/Documents/HDPMIL/datasets/{dataset}/DP_EM_feats_concentration{concentration}')
             np.save(f'/home/yhchen/Documents/HDPMIL/datasets/{dataset}/DP_EM_feats_concentration{concentration}/{feat_pth}.npy', centroids)
     return
 
@@ -131,7 +131,7 @@ def get_feats_revised(train_list, eta_cluster, feat_dim, dataset, method):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='base dictionary construction')
-    parser.add_argument('--dataset', type=str, default='BRCA')
+    parser.add_argument('--dataset', type=str, default='BRACS_WSI')
     parser.add_argument('--num_prototypes', type=int, default=8)
     parser.add_argument('--num_shift_vectors', type=int, default=200)
     parser.add_argument('--lr', default=0.0002, type=float, help='Initial learning rate [0.0002]')
@@ -167,7 +167,7 @@ if __name__ == '__main__':
     else:
         # all_list = np.load(f'pending_list_{args.split}.npy')
         # all_list = all_list.tolist()
-        all_list = glob.glob(f'/data1/WSI/Patches/Features/{args.dataset}/{args.dataset}_Tissue_Kimia_20x/*')
+        all_list = glob.glob(f'/data1/WSI/Patches/Features/{args.dataset}/{args.dataset}_Kimia_20x/*')
         # exist_list = glob.glob('/home/r20user8/Documents/HDPMIL/datasets/'+args.dataset+'/DP_EM_feats/*')
         # pending_list = []
         # for item in all_list:

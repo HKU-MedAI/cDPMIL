@@ -4,7 +4,7 @@ import glob
 
 
 def Get_Aligned_Label(dataset,task):
-    if task== 'Stage':
+    if task== 'Stage' and dataset in ['BRCA','COAD','ESCA']:
         clinical_data = pd.read_csv('/data1/WSI/Patches/Cropped_Patches/'+ dataset +'/BioData/clinical.tsv',sep='\t')
         stage = clinical_data[['case_submitter_id','ajcc_pathologic_stage']]
         for i in range(len(stage)):
@@ -26,6 +26,18 @@ def Get_Aligned_Label(dataset,task):
             for j in range(len(graph_list)):
                 if stage.iloc[i,0] in graph_list[j]:
                     label_list[j]=stage.iloc[i,1]
+    elif task=='Stage' and dataset == 'BRACS':
+        all_slides = glob.glob('/data1/public/WSI/BRACS/BRACS_WSI/*/*/*/*.svs')
+        stage = []
+        slide_name = []
+        type_dic = {'Group_AT':0,'Group_BT':1,'Group_MT':2}
+        for i in all_slides:
+            slide_name.append(i.split('/')[-1].split('.')[0])
+            stage.append(type_dic[i.split('/')[-3]])
+        label = {'slide_name':slide_name,'label':stage}
+        label = pd.DataFrame(label)
+        label.to_csv('/data1/WSI/Patches/Cropped_Patches/BRACS_WSI/BioData/BRACS_Type_Label.csv',index=False)
+        return
 
     elif task=='Subtype':
         bio_data = pd.read_csv('/data1/WSI/Patches/Cropped_Patches/' + dataset + '/BioData/bioinfo.csv')
@@ -59,7 +71,7 @@ def Get_Aligned_Label(dataset,task):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='base dictionary construction')
-    parser.add_argument('--dataset', type=str, default='BRCA')
-    parser.add_argument('--task', type=str, default='Subtype')
+    parser.add_argument('--dataset', type=str, default='BRACS')
+    parser.add_argument('--task', type=str, default='Stage')
     args = parser.parse_args()
     Get_Aligned_Label(args.dataset,args.task)
