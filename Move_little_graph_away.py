@@ -8,7 +8,7 @@ import torch
 
 dataset = 'LUAD'
 # wsi_path = "/data1/WSI/Patches/Features/"+dataset+"/"+dataset+"_Kimia_20x/*"
-wsi_path = ['/data1/WSI/Patches/Features/LUSC/LUSC_Diagnostic_Kimia_20x/*','/data1/WSI/Patches/Features/LUAD/LUAD_Diagnostic_Kimia_20x/*']
+wsi_path = ['/data1/WSI/Patches/Features/BRACS_WSI/BRACS_WSI_Kimia_20x/*']
 # des_path = "/data1/WSI/Patches/Features/"+dataset+"/"+dataset+"_Kimia_20x_Little"
 # wsi_dirs = glob.glob(wsi_path)
 wsi_dirs = list()
@@ -26,13 +26,13 @@ for wsi in wsi_dirs:
         little_wsi.append(wsi)
 print(np.mean(node_nums))
 
-if not os.path.exists(des_path):
-    os.mkdir(des_path)
-
-source2des = list()
-for wsi in little_wsi:
-    des = os.path.join(des_path, wsi.split('/')[-1])
-    source2des.append([wsi, des])
-
-for x in source2des:
-    shutil.move(x[0], x[1])
+# if not os.path.exists(des_path):
+#     os.mkdir(des_path)
+#
+# source2des = list()
+# for wsi in little_wsi:
+#     des = os.path.join(des_path, wsi.split('/')[-1])
+#     source2des.append([wsi, des])
+#
+# for x in source2des:
+#     shutil.move(x[0], x[1])

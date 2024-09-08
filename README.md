@@ -1,5 +1,5 @@
 # Notice
-This repository is the official implementation of the paper [cDP-MIL: Robust Multiple Instance Learning via Cascaded Dirichlet Process](https://arxiv.org/abs/2207.01805).
+This repository is the official implementation of the paper [cDP-MIL: Robust Multiple Instance Learning via Cascaded Dirichlet Process](https://arxiv.org/abs/2407.11448).
 
 However, the codes need some reorganization and we will update manuscript on how to use the codes soon :). 
 
