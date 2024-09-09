@@ -1,19 +1,13 @@
 import argparse
 import os
 
-import copy
 import numpy as np
 import torch
 from tqdm import tqdm
-from sklearn.neighbors import KNeighborsClassifier
-from tools.clustering import Kmeans
-from model.dpmil import DP_Cluster_EM, DP_Cluster_VI, DP_Classifier, BClassifier, FCLayer, MLP
-from collections import Counter
+from model.dpmil import  DP_Cluster_VI, DP_Classifier
 import random
-from sklearn.metrics import (accuracy_score, precision_score, recall_score,
-                             roc_auc_score, roc_curve)
+from sklearn.metrics import (roc_auc_score, roc_curve)
 import time
-import math
 import wandb
 from pyhealth.metrics import binary_metrics_fn, multiclass_metrics_fn
 from sklearn.mixture import BayesianGaussianMixture
