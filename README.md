@@ -6,15 +6,6 @@ However, the codes need some reorganization and we will update manuscript on how
 # [ECCV2024] cDP-MIL: Robust Multiple Instance Learning via Cascaded Dirichlet Process
 
 
-[//]: # (This repository holds the Pytorch implementation for the ReMix augmentation described in the paper )
-
-[//]: # (> [**ReMix: A General and Efficient Framework for Multiple Instance Learning based Whole Slide Image Classification**](https://arxiv.org/abs/2207.01805),  )
-
-[//]: # (> Jiawei Yang, Hanbo Chen, Yu Zhao, Fan Yang,  Yao Zhang, Lei He, and Jianhua Yao    )
-
-[//]: # (> International Conference on Medical Image Computing and Computer Assisted Intervention (MICCAI), 2022 )
-
-
 
 <p align="center">
 
