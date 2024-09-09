@@ -14,12 +14,6 @@ However, the codes need some reorganization and we will update manuscript on how
 </p>
 
 
-
-[//]: # (# Installation)
-
-[//]: # ()
-[//]: # (We use [Remix](https://github.com/1st-Yasuo/ReMix) as the original codebase.)
-
 # Data Download
 
 We use two dataset projects in our paper for demonstration: 1) [Camelyon16](https://camelyon16.grand-challenge.org/) and 2) [TCGA](https://portal.gdc.cancer.gov/). 
