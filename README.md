@@ -40,14 +40,6 @@ and you will find the aggregated feature files in your designated directory.
 
 So basically, the training module contains two step: aggregation and prediction.
 
-## DP Aggregation
-
-
-```shell
-
-python DP_feats_aggr.py --dataset LUAD
-
-```
 
 ## Model Training and Evaluation
 
@@ -75,6 +67,7 @@ Please consider citing our paper in your publications if the project helps your 
   journal={arXiv preprint arXiv:2407.11448},
   year={2024}
 }
+```
 
 
 
