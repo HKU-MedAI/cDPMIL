@@ -38,8 +38,6 @@ Then, run the command:
 ```
 and you will find the aggregated feature files in your designated directory.
 
-So basically, the training module contains two step: aggregation and prediction.
-
 
 ## Model Training and Evaluation
 
